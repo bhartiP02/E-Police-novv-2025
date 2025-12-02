@@ -235,7 +235,7 @@ export function AppSidebar({ isOpen, onClose }: AppSidebarProps) {
             }
 
             // ---------- NORMAL MENU ITEM ----------
-            const isActive = pathname.startsWith(item.url);
+            const isActive = item.url ? pathname.startsWith(item.url) : false;
 
             return (
               <Link
