@@ -1337,7 +1337,7 @@ export default function PoliceStationPage() {
         onSubmit={handleUpdate}
         title={`Edit Police Station - ID: ${editingPoliceStation?.id || ''}`}
         fields={editPoliceStationFields}
-        saveLoading={saveLoading}
+        isLoading={saveLoading}
       />
 
       {/* VIEW MODAL */}
