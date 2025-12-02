@@ -470,10 +470,12 @@ export default function PoliceStationPage() {
   // ============================================
   // SEARCH FUNCTIONALITY - SERVER-SIDE (KEPT AS IS)
   // ============================================
-  const handleSearch = useCallback((query: string) => {
+  const handleSearch = useCallback(async (query: string) => {
     setSearchQuery(query);
     setPagination(prev => ({ ...prev, pageIndex: 0 }));
+    return []; // ✔ required to satisfy SearchComponent type
   }, []);
+
 
   // ============================================
   // LAZY LOADING HANDLERS (UPDATED)
