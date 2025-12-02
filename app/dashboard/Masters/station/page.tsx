@@ -1271,9 +1271,6 @@ export default function PoliceStationPage() {
     getRowId: (row) => row.id,
     columnVisibility: columnVisibility,
     onColumnVisibilityChange: setColumnVisibility,
-    initialState: {
-      columnVisibility: columnVisibility,
-    },
   });
 
   // ============================================
