@@ -254,7 +254,7 @@ export interface DataTableProps<T> {
   defaultTextWrap?: TextWrapOption;
   enableColumnWrapping?: boolean;
   selectedRowId?: number | string | null;
-  getRowId?: (row: T) => number | string;
+  getRowId?: (row: T & { id?: string | number }) => number | string;
   headerBgColor?: string;
   headerTextColor?: string;
 }
@@ -288,7 +288,11 @@ export function CustomTable<T extends object>(
   defaultTextWrap = "nowrap",
   enableColumnWrapping = true,
   selectedRowId = null,
-  getRowId = (row: T) => (row.id ?? (row as any).deviceId ?? (row as any).key) as string | number,
+  getRowId = (row: T) =>
+  (row as any).id ??
+  (row as any).deviceId ??
+  (row as any).key ??
+  Math.random().toString(36);
   headerBgColor = "#E0E7FD",
   headerTextColor = "#000000",
 }: DataTableProps<T>) {
