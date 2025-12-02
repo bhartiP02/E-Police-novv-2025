@@ -1032,15 +1032,23 @@ export default function PoliceUserPage() {
           <div className="w-full max-w-xs">
             <SearchComponent
               placeholder="Search Police Users..."
-              displayKey={["name", "email", "mobile", "designation_type", "designation_name", "district_name"]}
-              debounceDelay={300}
+              debounceDelay={400}
               serverSideSearch={true}
-              onSearch={(query) => {
-                const results = policeUsers.filter((user) =>
-                  JSON.stringify(user).toLowerCase().includes(query.toLowerCase())
-                );
-                handleSearchResults(results);
-                return Promise.resolve(results);
+              onSearch={async (query: string) => {
+                
+                const response = await api.get("/police-users", {
+                  search: query,
+                  page: pagination.pageIndex + 1,
+                  limit: pagination.pageSize,
+                });
+
+                const results = extractPoliceUserData(response);
+
+                // update UI
+                setFilteredPoliceUsers(results);
+                setTotalCount(results.length);
+
+                return results; // SearchComponent requires this
               }}
             />
           </div>
