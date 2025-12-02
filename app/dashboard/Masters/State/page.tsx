@@ -242,58 +242,56 @@ export default function StatePage() {
     [fetchStates, pagination, searchQuery, showToast]
   );
 
-  const editModalFields = useMemo(
-    () => [
-      {
-        type: "select",
-        name: "country_id",
-        label: "Country Name",
-        required: true,
-        defaultValue: editingState?.country_id?.toString() || "",
-        options: countries.map((c) => ({
-          value: c.id.toString(),
-          label: c.country_name,
-        })),
-        customProps: {
-          onMouseDown: async () => {
-            const res = await api.get<{ data: any[] }>("/states/getcountry");
-            const data = Array.isArray(res) ? res : res.data || [];
-            setCountries(data);
-          },
+  const editModalFields: FieldConfig[] = useMemo(() => [
+    {
+      type: "select" as const,
+      name: "country_id",
+      label: "Country Name",
+      required: true,
+      defaultValue: editingState?.country_id?.toString() || "",
+      options: countries.map((c) => ({
+        value: c.id.toString(),
+        label: c.country_name,
+      })),
+      customProps: {
+        onMouseDown: async () => {
+          const res = await api.get<{ data: any[] }>("/states/getcountry");
+          const data = Array.isArray(res) ? res : res.data || [];
+          setCountries(data);
         },
       },
-      {
-        type: "text",
-        name: "state_name_en",
-        label: "State Name (English)",
-        defaultValue: editingState?.state_name_en || "",
-        required: true,
-      },
-      {
-        type: "text",
-        name: "state_name_marathi",
-        label: "State Name (Marathi)",
-        defaultValue: editingState?.state_name_marathi || "",
-      },
-      {
-        type: "text",
-        name: "state_name_hindi",
-        label: "State Name (Hindi)",
-        defaultValue: editingState?.state_name_hindi || "",
-      },
-      {
-        type: "select",
-        name: "status",
-        label: "Status",
-        defaultValue: editingState?.status || "Yes",
-        options: [
-          { value: "Yes", label: "Active" },
-          { value: "No", label: "Inactive" },
-        ],
-      },
-    ],
-    [countries, editingState]
-  );
+    },
+    {
+      type: "text" as const,
+      name: "state_name_en",
+      label: "State Name (English)",
+      defaultValue: editingState?.state_name_en || "",
+      required: true,
+    },
+    {
+      type: "text" as const,
+      name: "state_name_marathi",
+      label: "State Name (Marathi)",
+      defaultValue: editingState?.state_name_marathi || "",
+    },
+    {
+      type: "text" as const,
+      name: "state_name_hindi",
+      label: "State Name (Hindi)",
+      defaultValue: editingState?.state_name_hindi || "",
+    },
+    {
+      type: "select" as const,
+      name: "status",
+      label: "Status",
+      defaultValue: editingState?.status || "Yes",
+      options: [
+        { value: "Yes", label: "Active" },
+        { value: "No", label: "Inactive" },
+      ],
+    },
+  ], [countries, editingState]);
+
 
   const columns: ColumnDef<StateRow>[] = useMemo(
     () => [
