@@ -188,7 +188,7 @@ export default function CitiesPage() {
   const fetchCountries = useCallback(async () => {
     try {
       setIsCountriesLoading(true);
-      const response = await api.get("/states/getcountry");
+      const response: any = await api.get("/states/getcountry");
       const countriesData = extractCountryData(response);
       setCountries(countriesData);
       setCountriesLoaded(true);
@@ -202,7 +202,7 @@ export default function CitiesPage() {
   const fetchAllStates = useCallback(async () => {
     try {
       setIsStatesLoading(true);
-      const response = await api.get("/states");
+      const response: any = await api.get("/states");
       const statesData = extractStateData(response);
       setStates(statesData);
       setStatesLoaded(true);
@@ -217,7 +217,7 @@ export default function CitiesPage() {
     if (!countryId) return [];
     try {
       setIsStatesLoading(true);
-      const response = await api.get(`/states/country/${countryId}`);
+      const response: any = await api.get(`/states/country/${countryId}`);
       return extractStateData(response);
     } catch (error) {
       console.error("Error fetching states:", error);
@@ -231,7 +231,7 @@ export default function CitiesPage() {
     if (!stateId) return [];
     try {
       setIsDistrictsLoading(true);
-      const response = await api.get(`/districts/state/${stateId}`);
+      const response: any = await api.get(`/districts/state/${stateId}`);
       return extractDistrictData(response);
     } catch (error) {
       console.error("Error fetching districts:", error);
@@ -244,7 +244,7 @@ export default function CitiesPage() {
   const fetchCityDetail = useCallback(async (cityId: number) => {
     try {
       setDetailLoading(true);
-      const response = await api.get(`/cities/${cityId}`);
+      const response: any = await api.get(`/cities/${cityId}`);
       const cityDetailData = extractCityDetail(response);
       setCityDetail(cityDetailData);
       return cityDetailData;
@@ -265,7 +265,7 @@ export default function CitiesPage() {
       let url = `/cities?page=${pageIndex + 1}&limit=${pageSize}`;
       if (searchTerm.trim()) url += `&search=${encodeURIComponent(searchTerm)}`;
       
-      const response = await api.get(url);
+      const response: any = await api.get(url);
       const cityData = extractCityData(response);
       setCities(cityData);
       
