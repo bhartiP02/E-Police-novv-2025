@@ -258,10 +258,16 @@ export default function SDPOPage() {
 
       setSdpos(basicSdpoData);
       
-      // Extract total count
-      const totalRecords = response?.data?.totalRecords || response?.totalRecords || 
-                          response?.data?.total || response?.total || 
-                          response?.data?.count || basicSdpoData.length;
+      const res: any = response;
+
+      const totalRecords =
+        res?.data?.totalRecords ||
+        res?.totalRecords ||
+        res?.data?.total ||
+        res?.total ||
+        res?.data?.count ||
+        basicSdpoData.length;
+      
       setTotalCount(totalRecords);
       
     } catch (error) {
