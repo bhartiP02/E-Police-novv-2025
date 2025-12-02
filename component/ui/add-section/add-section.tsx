@@ -10,11 +10,16 @@ export interface FieldConfig {
   required?: boolean;
   options?: { value: string; label: string }[];
   className?: string;
+
+  // Support pre-filled values (needed in EditModal)
+  defaultValue?: string | number;
+
+  // Support async handlers + custom className
   customProps?: {
-    onMouseDown?: (e: React.MouseEvent) => void;
-    onFocus?: (e: React.FocusEvent) => void;
-    onClick?: (e: React.MouseEvent) => void;
-    onChange?: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+    onMouseDown?: (e: React.MouseEvent) => void | Promise<void>;
+    onFocus?: (e: React.FocusEvent) => void | Promise<void>;
+    onClick?: (e: React.MouseEvent) => void | Promise<void>;
+    onChange?: (e: React.ChangeEvent<HTMLSelectElement>) => void | Promise<void>;
     className?: string;
   };
 }
