@@ -372,7 +372,7 @@ export default function PoliceStationPage() {
       
       console.log("📡 API URL:", url);
       
-      const response = await api.get(url);
+      const response = await api.get<any>(url);
       
       console.log("🏁 Police Stations API full response:", response);
       
@@ -389,26 +389,26 @@ export default function PoliceStationPage() {
       setPoliceStations(basicPoliceStationData);
       
       let totalRecords = 0;
-      
-      if (response?.data?.totalRecords) {
-        totalRecords = response.data.totalRecords;
-        console.log("✅ Total records from response.data.totalRecords:", totalRecords);
-      } else if (response?.totalRecords) {
-        totalRecords = response.totalRecords;
-        console.log("✅ Total records from response.totalRecords:", totalRecords);
-      } else if (response?.data?.total) {
-        totalRecords = response.data.total;
-        console.log("✅ Total records from response.data.total:", totalRecords);
-      } else if (response?.total) {
-        totalRecords = response.total;
-        console.log("✅ Total records from response.total:", totalRecords);
-      } else if (response?.data?.count) {
-        totalRecords = response.data.count;
-        console.log("✅ Total records from response.data.count:", totalRecords);
-      } else {
-        totalRecords = basicPoliceStationData.length;
-        console.log("⚠️ Using fallback total records from data length:", totalRecords);
+
+      const possibleTotals = [
+        response?.data?.totalRecords,
+        response?.totalRecords,
+        response?.data?.total,
+        response?.total,
+        response?.data?.count
+      ];
+
+      for (const val of possibleTotals) {
+        if (typeof val === "number") {
+          totalRecords = val;
+          break;
+        }
       }
+
+      if (totalRecords === 0) {
+        totalRecords = basicPoliceStationData.length;
+      }
+
       
       setTotalCount(totalRecords);
       
