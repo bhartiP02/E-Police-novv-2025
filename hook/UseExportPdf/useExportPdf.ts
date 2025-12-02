@@ -65,9 +65,10 @@ export const useExportPdf = () => {
       let yPosition = 20;
 
       // Color theme - Only Purple #9A65C2
-      const primaryColor = [154, 101, 194]; // #9A65C2
-      const headerBgColor = [154, 101, 194]; // #9A65C2 for table header too
-      const altRowColor = [255, 255, 255]; // White
+      const primaryColor: [number, number, number] = [154, 101, 194];
+      const headerBgColor: [number, number, number] = [154, 101, 194];
+      const altRowColor: [number, number, number] = [255, 255, 255];
+
 
         // Tiny rounded logo box (6x6) with project color background
         doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]); // fill with project purple
@@ -175,14 +176,14 @@ export const useExportPdf = () => {
           lineWidth: 0.1,
         },
         headStyles: {
-          fillColor: headerBgColor, // Purple header
-          textColor: [255, 255, 255], // White text
+          fillColor: headerBgColor as [number, number, number], // Purple header
+          textColor: [255, 255, 255],
           fontStyle: 'bold',
           halign: 'center',
           fontSize: 8,
         },
         alternateRowStyles: {
-          fillColor: altRowColor, // White rows (no alternating color)
+          fillColor: altRowColor as [number, number, number],
         },
         columnStyles: showSerialNumber
           ? {
