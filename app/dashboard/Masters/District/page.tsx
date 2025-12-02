@@ -437,7 +437,7 @@ export default function DistrictPage() {
   /* ============================================
      EDIT MODAL FIELDS
   ============================================ */
-  const editModalFields = useMemo(() => {
+  const editModalFields = useMemo<FieldConfig[]>(() => {
     if (!editingDistrict) return [];
 
     return [
@@ -460,8 +460,8 @@ export default function DistrictPage() {
             const countryId = e.target.value;
             const states = await fetchStatesByCountry(countryId);
             setEditStates(states);
-          }
-        }
+          },
+        },
       },
 
       {
@@ -482,9 +482,10 @@ export default function DistrictPage() {
 
             const states = await fetchStatesByCountry(countryId);
             setEditStates(states);
-          }
-        }
+          },
+        },
       },
+
       {
         type: "text",
         name: "district_name",
@@ -506,13 +507,14 @@ export default function DistrictPage() {
       },
       {
         type: "number",
-        name: "min_distance", 
+        name: "min_distance",
         label: "Distance (km)",
         required: true,
         defaultValue: editingDistrict.min_distance.toString(),
       },
     ];
-  }, [editingDistrict, countries, editStates]);
+  }, [editingDistrict, countries, editStates, fetchCountries, fetchStatesByCountry]);
+
 
   /* ============================================
      ADD SECTION FIELDS
