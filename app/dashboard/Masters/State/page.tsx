@@ -256,7 +256,7 @@ export default function StatePage() {
         })),
         customProps: {
           onMouseDown: async () => {
-            const res = await api.get("/states/getcountry");
+            const res = await api.get<{ data: any[] }>("/states/getcountry");
             const data = Array.isArray(res) ? res : res.data || [];
             setCountries(data);
           },
