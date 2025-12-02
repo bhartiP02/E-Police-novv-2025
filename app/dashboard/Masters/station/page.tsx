@@ -649,7 +649,8 @@ export default function PoliceStationPage() {
       {
         name: 'category',
         label: 'Category :',
-        type: 'select',
+        type: 'select' as const,
+
         required: false,
         options: categoryOptions,
         placeholder: isCategoriesLoading ? "Loading categories..." : "Select Category",
@@ -665,7 +666,8 @@ export default function PoliceStationPage() {
       {
         name: 'country_id',
         label: 'Country :',
-        type: 'select',
+        type: 'select' as const,
+
         required: true,
         options: countries.map(country => ({
           value: country.id.toString(),
@@ -713,7 +715,8 @@ export default function PoliceStationPage() {
       {
         name: 'state_id',
         label: 'State :',
-        type: 'select',
+        type: 'select' as const,
+
         required: true,
         disabled: isEditMode
           ? !currentFormData?.country_id
@@ -786,7 +789,8 @@ export default function PoliceStationPage() {
       {
         name: 'district_id',
         label: 'District :',
-        type: 'select',
+        type: 'select' as const,
+
         required: true,
         disabled: isEditMode
           ? !currentFormData?.state_id
@@ -850,7 +854,8 @@ export default function PoliceStationPage() {
       {
         name: 'city_id',
         label: 'City :',
-        type: 'select',
+        type: 'select' as const,
+
         required: true,
         disabled: isEditMode
           ? !currentFormData?.district_id
@@ -912,7 +917,8 @@ export default function PoliceStationPage() {
       {
         name: 'sdpo_id',
         label: 'SDPO :',
-        type: 'select',
+        type: 'select' as const,
+
         required: true,
         disabled: isEditMode
           ? !currentFormData?.city_id
@@ -991,7 +997,8 @@ export default function PoliceStationPage() {
       ...(isEditMode ? [{
         name: 'status',
         label: 'Status :',
-        type: 'select',
+        type: 'select' as const,
+
         required: true,
         options: [
           { value: 'Active', label: 'Active' },
