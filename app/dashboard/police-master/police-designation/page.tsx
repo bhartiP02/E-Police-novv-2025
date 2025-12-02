@@ -131,19 +131,22 @@ export default function PoliceDesignationPage() {
     setSearchQuery(query);
     setPagination((prev) => ({ ...prev, pageIndex: 0 }));
 
-    const res = await api.get("/designations", {
-      params: { search: query, page: 1, limit: pagination.pageSize }
+    const res = await api.get<{
+      data?: PoliceDesignationRow[] | { data: PoliceDesignationRow[] };
+    }>("/designations", {
+      params: { search: query, page: 1, limit: pagination.pageSize },
     });
 
-    const results =
-      Array.isArray(res.data)
-        ? res.data
-        : res.data?.data || [];
+    const raw = res.data;
+
+    const results = Array.isArray(raw)
+      ? raw
+      : Array.isArray(raw?.data)
+      ? raw.data
+      : [];
 
     return results as PoliceDesignationRow[];
   };
-
-
 
   const handleSearchResults = useCallback((results: PoliceDesignationRow[]) => {
     setDesignations(results);
