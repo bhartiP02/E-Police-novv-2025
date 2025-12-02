@@ -727,11 +727,13 @@ export default function PoliceUserPage() {
   // ============================================
   // SEARCH FUNCTIONALITY
   // ============================================
-  const handleSearchResults = useCallback((results: PoliceUserRow[]) => {
-    setFilteredPoliceUsers(results);
-    setTotalCount(results.length);
+  const handleSearchResults = useCallback((results: Record<string, any>[]) => {
+    const sanitized = results as PoliceUserRow[];
+    setFilteredPoliceUsers(sanitized);
+    setTotalCount(sanitized.length);
     setPagination(prev => ({ ...prev, pageIndex: 0 }));
   }, []);
+
 
   // ============================================
   // EXPORT HANDLERS
