@@ -236,8 +236,10 @@ export interface DataTableProps<T> {
   pagination?: PaginationState;
   totalCount: number;
   loading?: boolean;
-  onPaginationChange?: (pagination: PaginationState) => void;
-  onSortingChange?: (sorting: SortingState) => void;
+  onPaginationChange?: (
+    updater: PaginationState | ((old: PaginationState) => PaginationState)
+  ) => void;
+  onSortingChange?: (updater: SortingState | ((old: SortingState) => SortingState)) => void;
   sorting?: SortingState;
   emptyMessage?: string;
   pageSizeOptions?: number[];
@@ -248,7 +250,9 @@ export interface DataTableProps<T> {
   serialNumberHeader?: string;
   maxHeight?: string;
   columnVisibility?: VisibilityState;
-  onColumnVisibilityChange?: (visibility: VisibilityState) => void;
+  onColumnVisibilityChange?: (
+    updater: VisibilityState | ((old: VisibilityState) => VisibilityState)
+  ) => void;
   onRowClick?: (row: T) => void;
   enableRowClick?: boolean;
   defaultTextWrap?: TextWrapOption;
@@ -431,9 +435,18 @@ export function CustomTable<T extends object>(
       pagination,
       columnVisibility: currentColVis,
     },
-    onSortingChange,
+    onSortingChange: (updater) => {
+      onSortingChange?.(
+        typeof updater === "function" ? updater(sorting) : updater
+      );
+    },
     onPaginationChange,
-    onColumnVisibilityChange: handleColVisChange,
+    onColumnVisibilityChange: (updater) => {
+    const newValue =
+      typeof updater === "function" ? updater(currentColVis) : updater;
+
+    handleColVisChange(newValue);
+  },
     pageCount: totalPages,
   });
 
