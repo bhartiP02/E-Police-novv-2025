@@ -667,7 +667,10 @@ export default function DistrictPage() {
             <SearchComponent
               placeholder="Search districts..."
               debounceDelay={400}
-              onSearch={handleSearch}
+              onSearch={async (query: string) => {
+                handleSearch(query);
+                return []; // return an empty array because serverSideSearch=false
+              }}
               // onClientSearch={handleClientSearch}
               serverSideSearch={false}
             />
