@@ -121,16 +121,12 @@ export default function StatePage() {
     [states, searchQuery]
   );
 
-  const handleServerSearch = useCallback(
-    async (query: string) => {
-      setSearchQuery(query);
-      if (query.trim() !== "") {
-        setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-      }
-      return states;
-    },
-    [states]
-  );
+  const handleServerSearch = useCallback(async (query: string) => {
+    setSearchQuery(query);
+    setPagination(prev => ({ ...prev, pageIndex: 0 }));
+    return []; // important: satisfy SearchComponent return type
+  }, []);
+
 
   const handleSearchResults = useCallback(() => {}, []);
 
@@ -393,7 +389,6 @@ export default function StatePage() {
               placeholder="Search State"
               debounceDelay={400}
               onSearch={handleServerSearch}
-              onResults={handleSearchResults}
             />
           </div>
         </div>

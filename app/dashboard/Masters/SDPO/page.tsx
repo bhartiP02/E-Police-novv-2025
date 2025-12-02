@@ -715,7 +715,7 @@ export default function SDPOPage() {
         defaultValue: editFormData?.state_id || "",
         placeholder: editStates.length === 0 ? "Select country first" : "Select state",
         customProps: {
-          onMouseDown: async (e: React.MouseEvent<HTMLSelectElement>) => {
+          onMouseDown: async (e: React.MouseEvent<Element>) => {
             const form = (e.target as HTMLSelectElement).form;
             const selectedCountryId = form?.country_id?.value || editFormData?.country_id;
             
@@ -756,7 +756,7 @@ export default function SDPOPage() {
         defaultValue: editFormData?.district_id || "",
         placeholder: editDistricts.length === 0 ? "Select state first" : "Select district",
         customProps: {
-          onMouseDown: async (e: React.MouseEvent<HTMLSelectElement>) => {
+          onMouseDown: async (e: React.MouseEvent<Element>) => {
             const form = (e.target as HTMLSelectElement).form;
             const selectedStateId = form?.state_id?.value || editFormData?.state_id;
             
@@ -796,7 +796,7 @@ export default function SDPOPage() {
         defaultValue: editFormData?.city_id || "",
         placeholder: editCities.length === 0 ? "Select district first" : "Select city",
         customProps: {
-          onMouseDown: async (e: React.MouseEvent<HTMLSelectElement>) => {
+          onMouseDown: async (e: React.MouseEvent<Element>) => {
             const form = (e.target as HTMLSelectElement).form;
             const selectedDistrictId = form?.district_id?.value || editFormData?.district_id;
             
