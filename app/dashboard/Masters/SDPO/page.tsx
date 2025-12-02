@@ -393,7 +393,7 @@ export default function SDPOPage() {
         customProps: {
           onMouseDown: handleCountryDropdownClick,
           onFocus: handleCountryDropdownClick,
-          onChange: async (e: React.ChangeEvent<HTMLSelectElement>) => {
+          onChange: async (e: any) => { 
             const countryId = e.target.value;
             setCurrentCountryId(countryId);
             setAddStates([]);
@@ -420,7 +420,7 @@ export default function SDPOPage() {
         customProps: {
           onMouseDown: handleStateDropdownClick,
           onFocus: handleStateDropdownClick,
-          onChange: async (e: React.ChangeEvent<HTMLSelectElement>) => {
+          onChange: async (e: any) => { 
             const stateId = e.target.value;
             setCurrentStateId(stateId);
             setAddDistricts([]);
@@ -447,7 +447,7 @@ export default function SDPOPage() {
         customProps: {
           onMouseDown: handleDistrictDropdownClick,
           onFocus: handleDistrictDropdownClick,
-          onChange: async (e: React.ChangeEvent<HTMLSelectElement>) => {
+          onChange: async (e: any) => { 
             const districtId = e.target.value;
             setCurrentDistrictId(districtId);
             setAddCities([]);
@@ -691,7 +691,7 @@ export default function SDPOPage() {
         customProps: {
           onMouseDown: () => handleEditCountryClick(),
           onFocus: () => handleEditCountryClick(),
-          onChange: async (e: React.ChangeEvent<HTMLSelectElement>) => {
+          onChange: async (e: any) => { 
             const countryId = e.target.value;
             if (countryId) {
               const statesData = await fetchStatesByCountry(countryId);
@@ -724,7 +724,7 @@ export default function SDPOPage() {
               setEditStates(statesData);
             }
           },
-          onFocus: async (e: React.FocusEvent<HTMLSelectElement>) => {
+          onFocus: async (e: any) => {
             const form = (e.target as HTMLSelectElement).form;
             const selectedCountryId = form?.country_id?.value || editFormData?.country_id;
             
@@ -733,7 +733,7 @@ export default function SDPOPage() {
               setEditStates(statesData);
             }
           },
-          onChange: async (e: React.ChangeEvent<HTMLSelectElement>) => {
+          onChange: async (e: any) => { 
             const stateId = e.target.value;
             if (stateId) {
               const districtsData = await fetchDistrictsByState(stateId);
@@ -765,7 +765,7 @@ export default function SDPOPage() {
               setEditDistricts(districtsData);
             }
           },
-          onFocus: async (e: React.FocusEvent<HTMLSelectElement>) => {
+          onFocus: async (e: any) => {
             const form = (e.target as HTMLSelectElement).form;
             const selectedStateId = form?.state_id?.value || editFormData?.state_id;
             
@@ -774,7 +774,7 @@ export default function SDPOPage() {
               setEditDistricts(districtsData);
             }
           },
-          onChange: async (e: React.ChangeEvent<HTMLSelectElement>) => {
+          onChange: async (e: any) => { 
             const districtId = e.target.value;
             if (districtId) {
               const citiesData = await fetchCitiesByDistrict(districtId);
@@ -805,7 +805,7 @@ export default function SDPOPage() {
               setEditCities(citiesData);
             }
           },
-          onFocus: async (e: React.FocusEvent<HTMLSelectElement>) => {
+          onFocus: async (e: any) => {
             const form = (e.target as HTMLSelectElement).form;
             const selectedDistrictId = form?.district_id?.value || editFormData?.district_id;
             
