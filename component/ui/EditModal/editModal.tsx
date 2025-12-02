@@ -26,12 +26,12 @@ const EditModal: React.FC<EditModalProps> = ({
   onFieldChange,      // ✅ FIX: Add this
   initialData 
 }) => {
-  const [formData, setFormData] = useState({});
+  const [formData, setFormData] = useState<Record<string, any>>({});
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
     if (isOpen && !isInitialized) {
-      const initialData: Record<string, string> = {};
+      const initialData: Record<string, any> = {};
       fields.forEach((field) => {
         initialData[field.name] = field.defaultValue?.toString() || "";
       });
