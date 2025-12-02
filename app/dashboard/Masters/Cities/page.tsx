@@ -258,36 +258,50 @@ export default function CitiesPage() {
     }
   }, [extractCityDetail, showToast]);
 
-  const fetchCities = useCallback(async (pageIndex: number, pageSize: number, searchTerm: string = "") => {
+  const fetchCities = useCallback(async (pageIndex: number, pageSize: number, searchTerm: string = ""): Promise<CityRow[]> => {
     try {
       setLoading(true);
       setError(null);
-      
+
       let url = `/cities?page=${pageIndex + 1}&limit=${pageSize}`;
       if (searchTerm.trim()) url += `&search=${encodeURIComponent(searchTerm)}`;
-      
+
       const response: any = await api.get(url);
       const cityData = extractCityData(response);
       setCities(cityData);
-      
-      const totalRecords = response?.data?.totalRecords || response?.totalRecords || 
+
+      const totalRecords = response?.data?.totalRecords || response?.totalRecords ||
                           response?.data?.total || response?.total || cityData.length;
       setTotalCount(totalRecords);
-      
+
+      return cityData;
     } catch (error) {
       console.error("Error fetching cities:", error);
       setError("Failed to fetch cities");
       setCities([]);
       setTotalCount(0);
+      return [];
     } finally {
       setLoading(false);
     }
   }, [extractCityData]);
 
-  const handleSearch = useCallback((query: string) => {
+
+  const handleSearch = useCallback(async (query: string): Promise<Record<string, any>[]> => {
+    // reset to first page
     setSearchQuery(query);
     setPagination(prev => ({ ...prev, pageIndex: 0 }));
-  }, []);
+
+    // call fetchCities to perform server-side fetch and return the results
+    // Use the current pageSize from pagination state
+    const pageSize = pagination.pageSize ?? 10;
+    const result = await fetchCities(0, pageSize, query);
+
+    // cast to the shape expected by SearchComponent (Record<string, any>[])
+    return result as unknown as Record<string, any>[];
+  }, [fetchCities, pagination.pageSize]);
+
+
 
   useEffect(() => {
       fetchCities(pagination.pageIndex, pagination.pageSize, searchQuery);
