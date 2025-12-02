@@ -958,7 +958,6 @@ export default function SDPOPage() {
         title={`Edit SDPO ${editingSdpo ? `- ${editingSdpo.name}` : ''}`}
         fields={editModalFields}
         onFieldChange={handleEditFieldChange}
-        initialData={editFormData}
       />
     </div>
   );
