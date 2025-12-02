@@ -931,7 +931,10 @@ export default function SDPOPage() {
             <SearchComponent
               placeholder="Search SDPOs..."
               debounceDelay={400}
-              onSearch={handleSearch}
+              onSearch={async (query: string) => {
+                handleSearch(query);
+                return []; // MUST return something because SearchComponent expects Promise<any[]>
+              }}
               serverSideSearch={true}
             />
           </div>
