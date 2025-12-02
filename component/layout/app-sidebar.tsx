@@ -240,7 +240,7 @@ export function AppSidebar({ isOpen, onClose }: AppSidebarProps) {
             return (
               <Link
                 key={item.url}
-                href={item.url}
+                href={item.url ?? "#"}
                 className="flex items-center gap-3 px-4 py-3 hover:bg-gray-800"
                 style={{
                   backgroundColor: isActive ? COLORS.primary : "transparent",
