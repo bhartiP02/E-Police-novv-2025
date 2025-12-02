@@ -15,6 +15,7 @@ export interface FieldConfig {
     onFocus?: (e: React.FocusEvent) => void;
     onClick?: (e: React.MouseEvent) => void;
     onChange?: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+    className?: string;
   };
 }
 
