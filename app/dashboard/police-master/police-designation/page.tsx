@@ -173,7 +173,7 @@ export default function PoliceDesignationPage() {
     async (id: number) => {
       try {
         const res = await api.get<{ data: PoliceDesignationRow }>(`/designations/${id}`);
-        const data = res.data?.data;
+        const data = res.data;
 
         return {
           id: data.id,
