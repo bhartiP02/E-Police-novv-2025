@@ -1031,11 +1031,17 @@ export default function PoliceUserPage() {
 
           <div className="w-full max-w-xs">
             <SearchComponent
-              data={policeUsers}
               placeholder="Search Police Users..."
               displayKey={["name", "email", "mobile", "designation_type", "designation_name", "district_name"]}
-              onResults={handleSearchResults}
               debounceDelay={300}
+              serverSideSearch={true}
+              onSearch={(query) => {
+                const results = policeUsers.filter((user) =>
+                  JSON.stringify(user).toLowerCase().includes(query.toLowerCase())
+                );
+                handleSearchResults(results);
+                return Promise.resolve(results);
+              }}
             />
           </div>
         </div>
