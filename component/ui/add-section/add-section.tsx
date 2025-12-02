@@ -11,6 +11,7 @@ export interface FieldConfig {
   options?: { value: string; label: string }[];
   className?: string;
   rows?: number;
+  disabled?: boolean;
 
   // Support pre-filled values (needed in EditModal)
   defaultValue?: string | number;
