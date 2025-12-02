@@ -72,7 +72,7 @@ export default function DistrictPage() {
     pageIndex: 0,
     pageSize: 10,
   });
-  const [sorting, setSorting] = useState<SortingState[]>([]);
+  const [sorting, setSorting] = useState<SortingState>([]);
   const [totalCount, setTotalCount] = useState(0);
   const { exportToPdf } = useExportPdf();
 
