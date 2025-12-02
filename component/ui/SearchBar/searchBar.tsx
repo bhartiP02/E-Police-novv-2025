@@ -45,10 +45,15 @@ function Input({ className, type, icon, iconPosition = "right", ...props }: Inpu
 interface SearchComponentProps<T = unknown> {
   placeholder?: string;
   debounceDelay?: number;
+
+  // callback when results are received (optional)
   onResults?: (results: T[]) => void;
 
-  // Only server-side support
+  // called when user types (server API call required)
   onSearch: (query: string) => Promise<T[]>;
+
+  // 🔥 NEW: allows <SearchComponent serverSideSearch={true} />
+  serverSideSearch?: boolean;
 
   className?: string;
 }
@@ -59,6 +64,7 @@ const SearchComponent = <T extends Record<string, any>>({
   className = "",
   onResults,
   onSearch,
+  serverSideSearch = false,   // default: false
 }: SearchComponentProps<T>) => {
   const [query, setQuery] = useState("");
   const onResultsRef = useRef(onResults);
@@ -67,15 +73,18 @@ const SearchComponent = <T extends Record<string, any>>({
     onResultsRef.current = onResults;
   }, [onResults]);
 
-  // Server-side searching only
+  // 🔥 If serverSideSearch is enabled → run API search on debounce.
+  // If NOT enabled → do nothing automatically (parent can decide behaviour)
   useEffect(() => {
+    if (!serverSideSearch) return;
+
     const debounce = setTimeout(async () => {
       const results = await onSearch(query);
       onResultsRef.current?.(results);
     }, debounceDelay);
 
     return () => clearTimeout(debounce);
-  }, [query, debounceDelay, onSearch]);
+  }, [query, debounceDelay, onSearch, serverSideSearch]);
 
   return (
     <div className={cn("w-full", className)}>
