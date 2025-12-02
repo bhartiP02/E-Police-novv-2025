@@ -15,6 +15,8 @@ import { ColumnVisibilitySelector } from "@/component/ui/Column-Visibility/colum
 import { AlertPopover, Toast } from "@/component/ui/AlertPopover";
 import EditModal from "@/component/ui/EditModal/editModal";
 import { useExportPdf, ExportPdfOptions } from "@/hook/UseExportPdf/useExportPdf";
+import type { FieldConfig } from "@/component/ui/add-section/add-section";
+
 
 interface StateRow {
   id: number;
