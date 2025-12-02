@@ -266,7 +266,7 @@ export default function StatePage() {
         type: "text",
         name: "state_name_en",
         label: "State Name (English)",
-        defaultValue: editingState?.state_name_en || editingState?.state_name || "",
+        defaultValue: editingState?.state_name_en || "",
         required: true,
       },
       {
@@ -298,7 +298,7 @@ export default function StatePage() {
   const columns: ColumnDef<StateRow>[] = useMemo(
     () => [
       { accessorKey: "country_name", header: "Country Name" },
-      { accessorKey: "state_name", header: "State Name" },
+      { accessorKey: "state_name_en", header: "State Name" },
       {
         id: "actions",
         header: "Actions",
