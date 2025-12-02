@@ -441,132 +441,124 @@ export default function CitiesPage() {
     }
   ], [countries, filteredStates, filteredDistricts, isCountriesLoading, isStatesLoading, isDistrictsLoading, currentStateId, handleCountryDropdownClick, handleStateDropdownClick, handleDistrictDropdownClick, fetchStatesByCountry, fetchDistrictsByState, fieldClassName]);
 
-  const editModalFields = useMemo(() => {
+  const editModalFields = useMemo<FieldConfig[]>(() => {
     if (!cityDetail) return [];
-
     return [
-      {
-        type: "select" as const,
-        name: "country_id",
-        label: "Country Name",
-        options: countries.map((country) => ({
-          value: country.id.toString(),
-          label: country.country_name,
-        })),
-        required: true,
-        defaultValue: cityDetail.country_id?.toString() || "",
-        customProps: {
-          className: fieldClassName,
-
-          // 🔹 Load full country list ONLY when dropdown is clicked
-          onMouseDown: async () => {
-            const res = await api.get("/states/getcountry");
-            const data = extractCountryData(res);
-            setCountries(data);
-          },
-
-          // 🔹 When country changes, load its states
-          onChange: async (e: React.ChangeEvent<HTMLSelectElement>) => {
-            const countryId = e.target.value;
-            if (countryId) {
-              const statesData = await fetchStatesByCountry(countryId);
-              setEditStates(statesData);
-              setEditDistricts([]); // reset districts
-            }
-          },
+        {
+            type: "select",
+            name: "country_id",
+            label: "Country Name",
+            options: countries.map((country) => ({
+                value: country.id.toString(),
+                label: country.country_name,
+            })),
+            required: true,
+            defaultValue: cityDetail.country_id?.toString() || "",
+            customProps: {
+                className: fieldClassName,
+                onMouseDown: async () => {
+                    const res = await api.get("/states/getcountry");
+                    const data = extractCountryData(res);
+                    setCountries(data);
+                },
+                onChange: async (e) => {
+                    const countryId = e.target.value;
+                    if (countryId) {
+                        const statesData = await fetchStatesByCountry(countryId);
+                        setEditStates(statesData);
+                        setEditDistricts([]);
+                    }
+                },
+            },
         },
-      },
-
-      {
-        type: "select" as const,
-        name: "state_id",
-        label: "State Name",
-        options: editStates.map((state) => ({
-          value: state.id.toString(),
-          label: state.state_name_en || state.state_name,
-        })),
-        required: true,
-        defaultValue: cityDetail.state_id?.toString() || "",
-        customProps: {
-          className: fieldClassName,
-
-          // 🔹 When user clicks state dropdown, ensure states loaded for current country
-          onMouseDown: async (e: React.MouseEvent<HTMLSelectElement>) => {
-            const form = (e.target as HTMLSelectElement).form;
-            const selectedCountryId =
-              form?.country_id?.value || cityDetail.country_id?.toString();
-
-            if (selectedCountryId) {
-              const statesData = await fetchStatesByCountry(selectedCountryId);
-              setEditStates(statesData);
-            }
-          },
-
-          // 🔹 When state changes, load its districts
-          onChange: async (e: React.ChangeEvent<HTMLSelectElement>) => {
-            const stateId = e.target.value;
-            if (stateId) {
-              const districtsData = await fetchDistrictsByState(stateId);
-              setEditDistricts(districtsData);
-            }
-          },
+        {
+            type: "select",
+            name: "state_id",
+            label: "State Name",
+            options: editStates.map((state) => ({
+                value: state.id.toString(),
+                label: state.state_name_en || state.state_name,
+            })),
+            required: true,
+            defaultValue: cityDetail.state_id?.toString() || "",
+            customProps: {
+                className: fieldClassName,
+                onMouseDown: async (e) => {
+                    const form = (e.target as HTMLSelectElement).form;
+                    const selectedCountryId =
+                        form?.country_id?.value || cityDetail.country_id?.toString();
+                    if (selectedCountryId) {
+                        const statesData = await fetchStatesByCountry(selectedCountryId);
+                        setEditStates(statesData);
+                    }
+                },
+                onChange: async (e) => {
+                    const stateId = e.target.value;
+                    if (stateId) {
+                        const districtsData = await fetchDistrictsByState(stateId);
+                        setEditDistricts(districtsData);
+                    }
+                },
+            },
         },
-      },
-
-      {
-        type: "select" as const,
-        name: "district_id",
-        label: "District Name",
-        options: editDistricts.map((district) => ({
-          value: district.id.toString(),
-          label: district.district_name,
-        })),
-        required: true,
-        defaultValue: cityDetail.district_id?.toString() || "",
-        customProps: {
-          className: fieldClassName,
-
-          // 🔹 Load districts ONLY when dropdown is clicked
-          onMouseDown: async (e: React.MouseEvent<HTMLSelectElement>) => {
-            const form = (e.target as HTMLSelectElement).form;
-            const selectedStateId =
-              form?.state_id?.value || cityDetail.state_id?.toString();
-
-            if (selectedStateId) {
-              const districtsData = await fetchDistrictsByState(selectedStateId);
-              setEditDistricts(districtsData);
-            }
-          },
+        {
+            type: "select",
+            name: "district_id",
+            label: "District Name",
+            options: editDistricts.map((district) => ({
+                value: district.id.toString(),
+                label: district.district_name,
+            })),
+            required: true,
+            defaultValue: cityDetail.district_id?.toString() || "",
+            customProps: {
+                className: fieldClassName,
+                onMouseDown: async (e) => {
+                    const form = (e.target as HTMLSelectElement).form;
+                    const selectedStateId =
+                        form?.state_id?.value || cityDetail.state_id?.toString();
+                    if (selectedStateId) {
+                        const districtsData = await fetchDistrictsByState(selectedStateId);
+                        setEditDistricts(districtsData);
+                    }
+                },
+            },
         },
-      },
-
-      {
-        type: "text" as const,
-        name: "city_name",
-        label: "City Name (English)",
-        required: true,
-        defaultValue: cityDetail.city_name || "",
-        customProps: { className: fieldClassName },
-      },
-      {
-        type: "text" as const,
-        name: "city_name_marathi",
-        label: "City Name (Marathi)",
-        required: true,
-        defaultValue: cityDetail.city_name_marathi || "",
-        customProps: { className: fieldClassName },
-      },
-      {
-        type: "text" as const,
-        name: "city_name_hindi",
-        label: "City Name (Hindi)",
-        required: true,
-        defaultValue: cityDetail.city_name_hindi || "",
-        customProps: { className: fieldClassName },
-      },
-
+        {
+            type: "text",
+            name: "city_name",
+            label: "City Name (English)",
+            required: true,
+            defaultValue: cityDetail.city_name,
+            customProps: { className: fieldClassName },
+        },
+        {
+            type: "text",
+            name: "city_name_marathi",
+            label: "City Name (Marathi)",
+            required: true,
+            defaultValue: cityDetail.city_name_marathi,
+            customProps: { className: fieldClassName },
+        },
+        {
+            type: "text",
+            name: "city_name_hindi",
+            label: "City Name (Hindi)",
+            required: true,
+            defaultValue: cityDetail.city_name_hindi,
+            customProps: { className: fieldClassName },
+        },
     ];
-  }, [cityDetail, countries, editStates, editDistricts, fetchStatesByCountry, fetchDistrictsByState, fieldClassName, extractCountryData]);
+}, [
+    cityDetail,
+    countries,
+    editStates,
+    editDistricts,
+    extractCountryData,
+    fetchStatesByCountry,
+    fetchDistrictsByState,
+    fieldClassName,
+]);
 
 
 
