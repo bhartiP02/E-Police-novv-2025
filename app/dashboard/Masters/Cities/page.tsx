@@ -580,7 +580,7 @@ export default function CitiesPage() {
         city_name_hindi: formData.city_name_hindi,
       };
 
-      await api.post("/cities", payload, { headers: { "Content-Type": "application/json" } });
+      await api.post("/cities", payload);
       fetchCities(pagination.pageIndex, pagination.pageSize, searchQuery);
       showToast("City added successfully!", "success");
     } catch (error) {
