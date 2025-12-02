@@ -11,6 +11,7 @@ interface EditModalProps {
   submitButtonText?: string;
   loadingMessage?: string;
   onFieldChange?: (fieldName: string, value: string, formData: any) => Promise<any> | any;
+  initialData?: Record<string, any>; 
 }
 
 const EditModal: React.FC<EditModalProps> = ({

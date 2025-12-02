@@ -7,7 +7,7 @@ import {
   PaginationState,
   SortingState,
 } from "@/component/ui/Table/CustomTable";
-import AddSection from "@/component/ui/add-section/add-section";
+import AddSection, { FieldConfig } from "@/component/ui/add-section/add-section";
 import { api } from "@/services/api/apiServices";
 import SearchComponent from "@/component/ui/SearchBar/searchBar";
 import { ExportButtons } from "@/component/ui/Export-Buttons/export-Buttons";
@@ -262,9 +262,9 @@ export default function PoliceDesignationPage() {
     [fetchDesignations, pagination, searchQuery, showToast]
   );
 
-  const editModalFields = useMemo(() => {
+  const editModalFields: FieldConfig[] = useMemo(() => {
     console.log("editModalFields updated with:", editingDesignation);
-    
+
     return [
       {
         type: "text",
@@ -285,6 +285,7 @@ export default function PoliceDesignationPage() {
       },
     ];
   }, [editingDesignation]);
+
 
   const columns: ColumnDef<PoliceDesignationRow>[] = useMemo(
     () => [
@@ -332,7 +333,6 @@ export default function PoliceDesignationPage() {
                 </button>
               }
               title="Are you sure you want to delete this designation?"
-              description="This action cannot be undone."
               okText="Delete"
               cancelText="Cancel"
               onConfirm={() => handleDeleteConfirm(row.original.id)}
@@ -422,7 +422,14 @@ export default function PoliceDesignationPage() {
         title="Edit Police Designation"
         fields={editModalFields}
         isLoading={isEditLoading}
-        initialData={editingDesignation || undefined}
+        initialData={
+          editingDesignation
+            ? {
+                designation_name: editingDesignation.designation_name,
+                status: editingDesignation.status
+              }
+            : undefined
+        }
         key={`edit-modal-${editingDesignation?.id || 'new'}`}
       />
     </div>
