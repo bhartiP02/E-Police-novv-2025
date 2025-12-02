@@ -138,8 +138,8 @@ export default function StatePage() {
   const fetchCountries = useCallback(async () => {
     try {
       setIsCountriesLoading(true);
-      const response = await api.get("/states/getcountry");
-      const data = Array.isArray(response) ? response : response?.data || [];
+      const response = await api.get<{ data: any[] }>("/states/getcountry");
+      const data = Array.isArray(response) ? response : response.data ?? [];
       setCountries(data);
       setCountriesLoaded(true);
     } finally {
