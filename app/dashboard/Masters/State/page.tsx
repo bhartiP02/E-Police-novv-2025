@@ -175,7 +175,7 @@ export default function StatePage() {
   const fetchStateById = useCallback(
     async (id: number) => {
       try {
-        const res = await api.get(`/states/${id}`);
+        const res = await api.get<{ data: any }>(`/states/${id}`);
         const data = res.data;
         return {
           id: data.id,
