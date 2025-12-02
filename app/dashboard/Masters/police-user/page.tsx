@@ -27,6 +27,8 @@ interface PoliceUserRow {
   address: string;
   image_url?: string;
   status?: string;
+  district_id?: number;
+  city_id?: number;
 }
 
 interface Country {
