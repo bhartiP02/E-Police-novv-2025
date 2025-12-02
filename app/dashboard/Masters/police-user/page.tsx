@@ -677,9 +677,9 @@ export default function PoliceUserPage() {
       type: 'textarea',
       placeholder: 'Enter address',
       required: true,
+      rows: 3,   // ✔ moved here
       customProps: {
-        className: "w-full border rounded px-3 py-2 text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500",
-        rows: 3
+        className: "w-full border rounded px-3 py-2 text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
       }
     }
   ], [
