@@ -57,7 +57,10 @@ export default function PoliceDesignationPage() {
     async (pageIndex: number, pageSize: number, search: string) => {
       try {
         setIsLoading(true);
-        const response = await api.get("/designations", {
+        const response = await api.get<{
+          data: PoliceDesignationRow[];
+          totalRecords: number;
+        }>("/designations", {
           page: pageIndex + 1,
           limit: pageSize,
           search: search || "",
@@ -118,18 +121,23 @@ export default function PoliceDesignationPage() {
     [designations, searchQuery]
   );
 
-  const handleServerSearch = useCallback(
-    async (query: string) => {
-      setSearchQuery(query);
-      if (query.trim() !== "") {
-        setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-      }
-      return designations;
-    },
-    [designations]
-  );
+  const handleServerSearch = async (query: string) => {
+    setSearchQuery(query);
+    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
 
-  const handleSearchResults = useCallback(() => {}, []);
+    const res = await api.get<{ data: PoliceDesignationRow[] }>("/designations", {
+      params: { search: query, page: 1, limit: pagination.pageSize }
+    });
+
+    const results = res.data?.data || [];
+    return results;
+  };
+
+
+  const handleSearchResults = useCallback((results: PoliceDesignationRow[]) => {
+    setDesignations(results);
+  }, []);
+
 
   const handleAddDesignation = useCallback(
     async (formData: any) => {
@@ -150,41 +158,15 @@ export default function PoliceDesignationPage() {
   const fetchDesignationById = useCallback(
     async (id: number) => {
       try {
-        console.log("Fetching designation with ID:", id);
-        const res = await api.get(`/designations/${id}`);
-        console.log("API response for designation:", res);
-        
-        // Handle different response structures
-        const data = res.data || res;
-        
-        if (!data) {
-          console.error("No data received from API");
-          return null;
-        }
-        
-        // Check different possible response structures
-        let designationData;
-        if (data.data) {
-          // If response has nested data property
-          designationData = data.data;
-        } else if (data.designation) {
-          // If response has nested designation property
-          designationData = data.designation;
-        } else {
-          // If data is directly the designation
-          designationData = data;
-        }
-        
-        console.log("Processed designation data:", designationData);
-        
+        const res = await api.get<{ data: PoliceDesignationRow }>(`/designations/${id}`);
+        const data = res.data?.data;
+
         return {
-          id: designationData.id,
-          designation_name: designationData.designation_name || designationData.designationName || "",
-          status: designationData.status || "Yes",
+          id: data.id,
+          designation_name: data.designation_name,
+          status: data.status || "Yes",
         };
-      } catch (error: any) {
-        console.error("Error fetching designation details:", error);
-        console.error("Error response:", error.response?.data);
+      } catch {
         return null;
       }
     },
@@ -410,6 +392,7 @@ export default function PoliceDesignationPage() {
               debounceDelay={400}
               onSearch={handleServerSearch}
               onResults={handleSearchResults}
+              serverSideSearch={true}
             />
           </div>
         </div>
