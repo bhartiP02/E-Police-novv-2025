@@ -66,11 +66,16 @@ export default function StatePage() {
     async (pageIndex: number, pageSize: number, search: string) => {
       try {
         setIsLoading(true);
-        const response = await api.get("/states", {
+
+        const response: {
+          data: any[];
+          totalRecords: number;
+        } = await api.get("/states", {
           page: pageIndex + 1,
           limit: pageSize,
           search: search || "",
         });
+
         setStates(response.data);
         setTotalCount(response.totalRecords);
       } finally {
