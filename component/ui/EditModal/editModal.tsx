@@ -10,6 +10,7 @@ interface EditModalProps {
   isLoading?: boolean;
   submitButtonText?: string;
   loadingMessage?: string;
+  onFieldChange?: (fieldName: string, value: string, formData: any) => Promise<any> | any;
 }
 
 const EditModal: React.FC<EditModalProps> = ({
@@ -42,9 +43,17 @@ const EditModal: React.FC<EditModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleChange = (name: string, value: string) => {
+  const handleChange = async (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
+
+    if (onFieldChange) {
+      const updated = await onFieldChange(name, value, formData);
+      if (updated) {
+        setFormData(updated);
+      }
+    }
   };
+
 
   const handleSubmit = () => {
     onSubmit(formData);
