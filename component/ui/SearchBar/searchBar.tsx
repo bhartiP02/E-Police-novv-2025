@@ -21,8 +21,9 @@ function Input({ className, type, icon, iconPosition = "right", ...props }: Inpu
         <div
           className={cn(
             "absolute top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none",
-            iconIsLeft && "left-3",
-            iconIsRight && "right-3"
+            iconIsLeft ? "left-3" : undefined,
+            iconIsRight ? "right-3" : undefined
+
           )}
         >
           {icon}
@@ -32,8 +33,8 @@ function Input({ className, type, icon, iconPosition = "right", ...props }: Inpu
         type={type}
         className={cn(
           "flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent",
-          iconIsLeft && "pl-10",
-          iconIsRight && "pr-10",
+          iconIsLeft ? "pl-10" : undefined,
+          iconIsRight ? "pr-10" : undefined,
           className
         )}
         {...props}
