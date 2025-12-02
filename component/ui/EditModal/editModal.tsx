@@ -23,6 +23,8 @@ const EditModal: React.FC<EditModalProps> = ({
   isLoading = false,
   submitButtonText = "Save Changes",
   loadingMessage,
+  onFieldChange,      // ✅ FIX: Add this
+  initialData 
 }) => {
   const [formData, setFormData] = useState({});
   const [isInitialized, setIsInitialized] = useState(false);
