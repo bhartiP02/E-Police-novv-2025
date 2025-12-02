@@ -5,6 +5,19 @@ import Cookies from "js-cookie";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 
+interface SubMenuItem {
+  title: string;
+  url: string;
+  icon?: string; // OPTIONAL
+}
+
+interface MenuItem {
+  title: string;
+  url?: string;
+  icon?: string; // OPTIONAL
+  submenu?: SubMenuItem[];
+}
+
 // Decode token
 function decodeToken(token: string) {
   try {
@@ -53,7 +66,7 @@ export function AppSidebar({ isOpen, onClose }: AppSidebarProps) {
   };
 
   // ----------- SIDEBAR STRUCTURE (MATCHING YOUR FILE STRUCTURE) -----------
-  const sidebarData = [
+  const sidebarData:MenuItem[] = [
     // Dashboard REMOVED from here (only in profile section now)
 
     // ---------- MASTERS -----------
@@ -191,7 +204,7 @@ export function AppSidebar({ isOpen, onClose }: AppSidebarProps) {
                     onClick={() => toggleMenu(item.title)}
                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-800 text-white"
                   >
-                    <span className="text-lg">{item.icon}</span>
+                    {item.icon && <span className="text-lg">{item.icon}</span>}
                     <span className="text-sm flex-1">{item.title}</span>
                     <span>{expandedMenus[item.title] ? "▼" : "▶"}</span>
                   </button>
@@ -210,7 +223,7 @@ export function AppSidebar({ isOpen, onClose }: AppSidebarProps) {
                               color: COLORS.text,
                             }}
                           >
-                            <span className="text-lg">{sub.icon}</span>
+                            {sub.icon && <span className="text-lg">{sub.icon}</span>}
                             <span>{sub.title}</span>
                           </Link>
                         );
