@@ -292,7 +292,7 @@ export function CustomTable<T extends object>(
   (row as any).id ??
   (row as any).deviceId ??
   (row as any).key ??
-  Math.random().toString(36);
+  Math.random().toString(36),
   headerBgColor = "#E0E7FD",
   headerTextColor = "#000000",
 }: DataTableProps<T>) {
