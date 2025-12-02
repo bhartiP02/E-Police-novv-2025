@@ -57,16 +57,21 @@ export default function PoliceDesignationPage() {
     async (pageIndex: number, pageSize: number, search: string) => {
       try {
         setIsLoading(true);
+
         const response = await api.get<{
           data: PoliceDesignationRow[];
           totalRecords: number;
         }>("/designations", {
-          page: pageIndex + 1,
-          limit: pageSize,
-          search: search || "",
+          params: {
+            page: pageIndex + 1,
+            limit: pageSize,
+            search: search || "",
+          },
         });
+
         setDesignations(response.data || []);
         setTotalCount(response.totalRecords || 0);
+
       } catch (error) {
         console.error("Error fetching designations:", error);
         showToast("Failed to fetch designations", "error");
@@ -76,6 +81,7 @@ export default function PoliceDesignationPage() {
     },
     [showToast]
   );
+
 
   useEffect(() => {
     fetchDesignations(pagination.pageIndex, pagination.pageSize, searchQuery);
