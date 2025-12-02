@@ -19,6 +19,7 @@ interface CityRow {
   district_name: string;
   city_name: string;
   status: string;
+  [key: string]: any;
 }
 
 interface Country {

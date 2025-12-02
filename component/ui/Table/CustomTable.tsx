@@ -263,7 +263,8 @@ export interface DataTableProps<T> {
 // MAIN COMPONENT
 // ============================================
 
-export function CustomTable<T extends Record<string, unknown>>({
+export function CustomTable<T extends object>(
+{
   data,
   columns,
   pagination: externalPagination,
