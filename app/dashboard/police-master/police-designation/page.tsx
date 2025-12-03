@@ -58,20 +58,13 @@ export default function PoliceDesignationPage() {
       try {
         setIsLoading(true);
 
-        const response = await api.get<{
-          data: PoliceDesignationRow[];
-          totalRecords: number;
-        }>("/designations", {
-          params: {
-            page: pageIndex + 1,
-            limit: pageSize,
-            search: search || "",
-          },
-        });
+        const response = await api.get(
+          `/designations?page=${pageIndex + 1}&limit=${pageSize}&search=${search || ""}`
+        );
+
 
         setDesignations(response.data || []);
         setTotalCount(response.totalRecords || 0);
-
       } catch (error) {
         console.error("Error fetching designations:", error);
         showToast("Failed to fetch designations", "error");
@@ -127,37 +120,22 @@ export default function PoliceDesignationPage() {
     [designations, searchQuery]
   );
 
-  const handleServerSearch = async (query: string) => {
+  // Search handler - same pattern as State page
+  const handleServerSearch = useCallback(async (query: string) => {
     setSearchQuery(query);
-    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-
-    const res = await api.get<{
-      data?: PoliceDesignationRow[] | { data: PoliceDesignationRow[] };
-    }>("/designations", {
-      params: { search: query, page: 1, limit: pagination.pageSize },
-    });
-
-    const raw = res.data;
-
-    const results = Array.isArray(raw)
-      ? raw
-      : Array.isArray(raw?.data)
-      ? raw.data
-      : [];
-
-    return results as PoliceDesignationRow[];
-  };
-
-  const handleSearchResults = useCallback((results: PoliceDesignationRow[]) => {
-    setDesignations(results);
+    setPagination(prev => ({ ...prev, pageIndex: 0 }));
+    return []; 
   }, []);
 
+
+  const handleSearchResults = useCallback(() => {}, []);
 
   const handleAddDesignation = useCallback(
     async (formData: any) => {
       try {
         await api.post("/designations", {
           designation_name: formData.designation_name,
+          status: formData.status || "Yes",
         });
         fetchDesignations(pagination.pageIndex, pagination.pageSize, searchQuery);
         showToast("Designation added successfully!", "success");
@@ -172,51 +150,43 @@ export default function PoliceDesignationPage() {
   const fetchDesignationById = useCallback(
     async (id: number) => {
       try {
-        const res = await api.get<{ data: PoliceDesignationRow }>(`/designations/${id}`);
+        const res = await api.get(`/designations/${id}`);
         const data = res.data;
-
+        
         return {
           id: data.id,
-          designation_name: data.designation_name,
+          designation_name: data.designation_name || "",
           status: data.status || "Yes",
         };
       } catch {
+        showToast("Failed to load designation details", "error");
         return null;
       }
     },
-    []
+    [showToast]
   );
 
-  const handleEdit = useCallback(async (designation: PoliceDesignationRow) => {
-    console.log("Edit clicked for designation:", designation);
-    
-    try {
-      setIsEditLoading(true);
-      
-      // First, try to fetch fresh data from API
-      const latest = await fetchDesignationById(designation.id);
-      
-      if (!latest) {
-        console.log("No fresh data fetched, using existing row data");
-        // If API fails, use the data from the row directly
-        setEditingDesignation(designation);
-        setIsEditModalOpen(true);
-      } else {
-        console.log("Fresh data fetched successfully:", latest);
+  const handleEdit = useCallback(
+    async (designation: PoliceDesignationRow) => {
+      try {
+        setIsEditLoading(true);
+        const latest = await fetchDesignationById(designation.id);
+        if (!latest) return;
+
         setEditingDesignation(latest);
         setIsEditModalOpen(true);
+      } catch (error) {
+        console.error("Error in handleEdit:", error);
+        // Fallback to row data if API fails
+        setEditingDesignation(designation);
+        setIsEditModalOpen(true);
+        showToast("Using cached data", "error");
+      } finally {
+        setIsEditLoading(false);
       }
-      
-    } catch (error) {
-      console.error("Error in handleEdit:", error);
-      // Fallback: use the existing row data
-      setEditingDesignation(designation);
-      setIsEditModalOpen(true);
-      showToast("Using cached data, some details may be outdated", "error");
-    } finally {
-      setIsEditLoading(false);
-    }
-  }, [fetchDesignationById, showToast]);
+    },
+    [fetchDesignationById, showToast]
+  );
 
   const handleUpdateDesignation = useCallback(
     async (formData: any) => {
@@ -226,14 +196,10 @@ export default function PoliceDesignationPage() {
           return;
         }
 
-        console.log("Updating designation:", editingDesignation.id, "with data:", formData);
-        
-        const response = await api.put(`/designations/${editingDesignation.id}`, {
+        await api.put(`/designations/${editingDesignation.id}`, {
           designation_name: formData.designation_name,
           status: formData.status,
         });
-        
-        console.log("Update response:", response);
         
         fetchDesignations(pagination.pageIndex, pagination.pageSize, searchQuery);
         setIsEditModalOpen(false);
@@ -241,7 +207,6 @@ export default function PoliceDesignationPage() {
         showToast("Designation updated successfully!", "success");
       } catch (error: any) {
         console.error("Error updating designation:", error);
-        console.error("Error details:", error.response?.data);
         showToast(`Failed to update designation: ${error.response?.data?.message || error.message}`, "error");
       }
     },
@@ -262,30 +227,25 @@ export default function PoliceDesignationPage() {
     [fetchDesignations, pagination, searchQuery, showToast]
   );
 
-  const editModalFields: FieldConfig[] = useMemo(() => {
-    console.log("editModalFields updated with:", editingDesignation);
-
-    return [
-      {
-        type: "text",
-        name: "designation_name",
-        label: "Designation Name",
-        defaultValue: editingDesignation?.designation_name || "",
-        required: true,
-      },
-      {
-        type: "select",
-        name: "status",
-        label: "Status",
-        defaultValue: editingDesignation?.status || "Yes",
-        options: [
-          { value: "Yes", label: "Active" },
-          { value: "No", label: "Inactive" },
-        ],
-      },
-    ];
-  }, [editingDesignation]);
-
+  const editModalFields: FieldConfig[] = useMemo(() => [
+    {
+      type: "text" as const,
+      name: "designation_name",
+      label: "Designation Name",
+      required: true,
+      defaultValue: editingDesignation?.designation_name || "",
+    },
+    {
+      type: "select" as const,
+      name: "status",
+      label: "Status",
+      defaultValue: editingDesignation?.status || "Yes",
+      options: [
+        { value: "Yes", label: "Active" },
+        { value: "No", label: "Inactive" },
+      ],
+    },
+  ], [editingDesignation]);
 
   const columns: ColumnDef<PoliceDesignationRow>[] = useMemo(
     () => [
@@ -359,12 +319,6 @@ export default function PoliceDesignationPage() {
     getRowId: (row) => row.id.toString(),
   });
 
-  const handleModalClose = useCallback(() => {
-    console.log("Closing edit modal");
-    setIsEditModalOpen(false);
-    setEditingDesignation(null);
-  }, []);
-
   return (
     <div className="w-full min-h-screen bg-white px-6 py-4">
       <Toast message={toast.message} type={toast.type} isVisible={toast.isVisible} />
@@ -384,7 +338,7 @@ export default function PoliceDesignationPage() {
             type: "select",
             name: "status",
             label: "Status",
-            placeholder: "Enter designation name",
+            defaultValue: "Yes",
             options: [
               { value: "Yes", label: "Active" },
               { value: "No", label: "Inactive" },
@@ -405,8 +359,8 @@ export default function PoliceDesignationPage() {
               placeholder="Search designation..."
               debounceDelay={400}
               onSearch={handleServerSearch}
-              onResults={handleSearchResults}
               serverSideSearch={true}
+              onResults={handleSearchResults}
             />
           </div>
         </div>
@@ -414,14 +368,15 @@ export default function PoliceDesignationPage() {
         {tableElement}
       </div>
 
-      {/* Edit Modal */}
       <EditModal
         isOpen={isEditModalOpen}
-        onClose={handleModalClose}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setEditingDesignation(null);
+        }}
         onSubmit={handleUpdateDesignation}
         title="Edit Police Designation"
         fields={editModalFields}
-        isLoading={isEditLoading}
         initialData={
           editingDesignation
             ? {

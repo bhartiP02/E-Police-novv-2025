@@ -26,6 +26,13 @@ const nextConfig: NextConfig = {
 
   // Optional: if you use trailing slash URLs
   // trailingSlash: true,
+
+  trailingSlash: true,
+  // IMPORTANT:
+  // Turn off server components fully
+  experimental: {
+    serverActions: false
+  }
 };
 
 export default nextConfig;

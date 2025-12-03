@@ -183,6 +183,7 @@ export default function StatePage() {
           id: data.id,
           country_id: data.country_id,
           country_name: data.country_name,
+          state_name: data.state_name,
           state_name_en: data.state_name_en,
           state_name_marathi: data.state_name_marathi || "",
           state_name_hindi: data.state_name_hindi || "",
@@ -298,7 +299,7 @@ export default function StatePage() {
   const columns: ColumnDef<StateRow>[] = useMemo(
     () => [
       { accessorKey: "country_name", header: "Country Name" },
-      { accessorKey: "state_name_en", header: "State Name" },
+      { accessorKey: "state_name", header: "State Name" },
       {
         id: "actions",
         header: "Actions",
