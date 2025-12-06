@@ -12,11 +12,12 @@ import SearchComponent from "@/component/ui/SearchBar/searchBar";
 import { ExportButtons } from "@/component/ui/Export-Buttons/export-Buttons";
 import { ColumnVisibilitySelector } from "@/component/ui/Column-Visibility/column-visibility";
 import EditModal from "@/component/ui/EditModal/editModal";
-import { AlertPopover } from "@/component/ui/AlertPopover";
+import { AlertPopover, Toast } from "@/component/ui/AlertPopover";
 import { useExportPdf, ExportPdfOptions } from "@/hook/UseExportPdf/useExportPdf";
 import { useExportExcel, ExportExcelOptions } from "@/hook/UseExportExcel/useExportExcel";
 import type { FieldConfig } from "@/component/ui/add-section/add-section";
 import type { State, Country } from "@/interface/interface";
+import { stateService } from "@/services/api-services/stateService";
 
 // React Query Hook
 import { useStates } from "@/hook/state/useState";
@@ -25,6 +26,13 @@ export default function StatePage() {
   const [countries, setCountries] = useState<Country[]>([]);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingState, setEditingState] = useState<State | null>(null);
+  const [isLoadingStateDetail, setIsLoadingStateDetail] = useState(false);
+
+  const [toast, setToast] = useState({
+    isVisible: false,
+    message: "",
+    type: "success" as "success" | "error",
+  });
 
   const { exportToPdf } = useExportPdf();
   const { exportToExcel } = useExportExcel();
@@ -56,19 +64,21 @@ export default function StatePage() {
     filters: { search: searchQuery },
   });
 
-  // ➤ DEBUG: Check search request URL
-  useEffect(() => {
-    console.log(
-      "SEARCH TRIGGERED:",
-      `/states?page=${pagination.pageIndex + 1}&limit=${pagination.pageSize}&search=${searchQuery}`
-    );
-  }, [searchQuery, pagination.pageIndex, pagination.pageSize]);
+  const showToast = useCallback((message: string, type: "success" | "error") => {
+    setToast({ isVisible: true, message, type });
+    setTimeout(() => setToast({ isVisible: false, message: "", type: "success" }), 3000);
+  }, []);
 
   // FETCH COUNTRIES
   const fetchCountries = useCallback(async () => {
-    const res = await fetch("/api/states/getcountry").then((r) => r.json());
-    setCountries(res);
-  }, []);
+    try {
+      const res = await fetch("/api/states/getcountry").then((r) => r.json());
+      setCountries(res);
+    } catch (error) {
+      console.error("Error fetching countries:", error);
+      showToast("Failed to fetch countries", "error");
+    }
+  }, [showToast]);
 
   const handleCountryDropdownClick = useCallback(async () => {
     if (countries.length === 0) await fetchCountries();
@@ -88,12 +98,32 @@ export default function StatePage() {
     [createState]
   );
 
-  // EDIT STATE (open modal)
-  const handleEdit = useCallback((state: State) => {
-    setEditingState(state);
-    setCountries([{ id: state.country_id, country_name: state.country_name }]);
-    setIsEditModalOpen(true);
-  }, []);
+  // ✅ FETCH STATE BY ID AND OPEN EDIT MODAL
+  const handleEdit = useCallback(async (state: State) => {
+    try {
+      setIsLoadingStateDetail(true);
+
+      // ✅ FETCH THE INDIVIDUAL STATE DETAILS FROM API
+      const stateDetail = await stateService.getStateById(state.id);
+
+      // Set the fresh data from API
+      setEditingState(stateDetail);
+
+      // Set country for dropdown
+      setCountries([
+        { id: stateDetail.country_id, country_name: stateDetail.country_name },
+      ]);
+
+      // Open modal
+      setIsEditModalOpen(true);
+      showToast("State details loaded successfully!", "success");
+    } catch (error) {
+      console.error("Error fetching state details:", error);
+      showToast("Failed to load state details. Please try again.", "error");
+    } finally {
+      setIsLoadingStateDetail(false);
+    }
+  }, [showToast]);
 
   // UPDATE STATE
   const handleUpdateState = useCallback(
@@ -110,6 +140,7 @@ export default function StatePage() {
       });
 
       setIsEditModalOpen(false);
+      setEditingState(null);
     },
     [updateState, editingState]
   );
@@ -122,11 +153,11 @@ export default function StatePage() {
     [deleteState]
   );
 
-  // SEARCH STATES
-  const handleServerSearch = useCallback((query: string) => {
+  // ✅ FIXED SEARCH - Reset pagination when searching
+  const handleSearch = useCallback((query: string) => {
     setSearchQuery(query.trim());
-    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-    return Promise.resolve([]);
+    // Reset to first page on search
+    setPagination({ pageIndex: 0, pageSize: 10 });
   }, []);
 
   /* ============================================
@@ -205,13 +236,17 @@ export default function StatePage() {
             <button
               onClick={() => handleEdit(row.original)}
               className="px-3 py-1 bg-blue-200 rounded"
+              disabled={isLoadingStateDetail || isUpdateLoading}
             >
-              {isUpdateLoading ? "Loading..." : "Edit"}
+              {isLoadingStateDetail ? "Loading..." : "Edit"}
             </button>
 
             <AlertPopover
               trigger={
-                <button className="px-3 py-1 bg-red-200 text-red-700 rounded">
+                <button
+                  className="px-3 py-1 bg-red-200 text-red-700 rounded"
+                  disabled={isDeleteLoading}
+                >
                   {isDeleteLoading ? "Removing..." : "Delete"}
                 </button>
               }
@@ -224,7 +259,13 @@ export default function StatePage() {
         ),
       },
     ],
-    [handleEdit, handleDeleteConfirm, isDeleteLoading, isUpdateLoading]
+    [
+      handleEdit,
+      handleDeleteConfirm,
+      isDeleteLoading,
+      isUpdateLoading,
+      isLoadingStateDetail,
+    ]
   );
 
   // TABLE RENDERER
@@ -240,11 +281,15 @@ export default function StatePage() {
     manualPagination: true,
     pageSizeOptions: [10, 20, 30, 50],
     emptyMessage: "No states found",
+    showSerialNumber: true,
+    serialNumberHeader: "S.NO.",
     getRowId: (row) => row.id,
   });
 
   return (
     <div className="w-full min-h-screen bg-white px-6">
+      <Toast message={toast.message} type={toast.type} isVisible={toast.isVisible} />
+
       {/* Add Section */}
       <AddSection
         title="Manage States"
@@ -257,7 +302,7 @@ export default function StatePage() {
             label: "Country",
             required: true,
             options: countries.map((c) => ({
-              value: c.id.toString(),
+              value: c.id?.toString(),
               label: c.country_name,
             })),
             customProps: { onMouseDown: handleCountryDropdownClick },
@@ -268,16 +313,24 @@ export default function StatePage() {
             label: "State Name (English)",
             required: true,
           },
-          { type: "text", name: "state_name_marathi", label: "State Name (Marathi)" },
-          { type: "text", name: "state_name_hindi", label: "State Name (Hindi)" },
+          {
+            type: "text",
+            name: "state_name_marathi",
+            label: "State Name (Marathi)",
+          },
+          {
+            type: "text",
+            name: "state_name_hindi",
+            label: "State Name (Hindi)",
+          },
         ]}
       />
 
       {/* Table + Filters */}
       <div className="mt-6">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex justify-between items-center mb-4 gap-4">
           <div className="flex items-center gap-2">
-            <ExportButtons 
+            <ExportButtons
               pdfConfig={pdfExportConfig}
               excelConfig={excelExportConfig}
             />
@@ -289,11 +342,7 @@ export default function StatePage() {
               placeholder="Search State..."
               debounceDelay={400}
               serverSideSearch={true}
-              onSearch={async (query: string) => {
-                setSearchQuery(query.trim());
-                setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-                return [];
-              }}
+              onSearch={handleSearch}
             />
           </div>
         </div>
@@ -304,9 +353,15 @@ export default function StatePage() {
       {/* Edit Modal */}
       <EditModal
         isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setEditingState(null);
+        }}
         onSubmit={handleUpdateState}
-        isLoading={isUpdateLoading}
+        isLoading={isUpdateLoading || isLoadingStateDetail}
+        loadingMessage={
+          isLoadingStateDetail ? "Loading state details..." : undefined
+        }
         title="Edit State"
         fields={[
           {
@@ -316,7 +371,7 @@ export default function StatePage() {
             required: true,
             defaultValue: editingState?.country_id?.toString(),
             options: countries.map((c) => ({
-              value: c.id.toString(),
+              value: c.id?.toString(),
               label: c.country_name,
             })),
             customProps: { onMouseDown: handleCountryDropdownClick },

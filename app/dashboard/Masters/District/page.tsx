@@ -17,13 +17,12 @@ import EditModal from "@/component/ui/EditModal/editModal";
 import { useExportPdf, ExportPdfOptions } from "@/hook/UseExportPdf/useExportPdf";
 import { useExportExcel, ExportExcelOptions } from "@/hook/UseExportExcel/useExportExcel";
 
-
 /* ============================================
    TYPES 
 ============================================ */
 interface DistrictRow {
-  id: number;              
-  district_id?: number;    
+  id: number;
+  district_id?: number;
   country_id: number;
   state_id: number;
   district_name: string;
@@ -60,6 +59,7 @@ export default function DistrictPage() {
   const [countriesLoaded, setCountriesLoaded] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [editStates, setEditStates] = useState<State[]>([]);
+  const [isLoadingDistrictDetail, setIsLoadingDistrictDetail] = useState(false);
 
   const [toast, setToast] = useState({
     isVisible: false,
@@ -140,6 +140,11 @@ export default function DistrictPage() {
     [showToast]
   );
 
+  // ✅ AUTO-FETCH ON PAGINATION/SEARCH CHANGE
+  useEffect(() => {
+    fetchDistricts(pagination.pageIndex, pagination.pageSize, searchQuery);
+  }, [pagination.pageIndex, pagination.pageSize, searchQuery, fetchDistricts]);
+
   /* ============================================
      PDF EXPORT CONFIG
   ============================================ */
@@ -159,7 +164,7 @@ export default function DistrictPage() {
         header: "Status",
         accessorKey: "status",
         formatter: (value) => (value === "Active" ? "Active" : "Inactive"),
-      }
+      },
     ],
     data: districts,
     showSerialNumber: true,
@@ -168,7 +173,7 @@ export default function DistrictPage() {
     exportDate: true,
     showTotalCount: true,
     searchQuery: searchQuery || "All districts",
-    userRole: "admin"
+    userRole: "admin",
   }), [districts, searchQuery]);
 
   /* ============================================
@@ -189,7 +194,7 @@ export default function DistrictPage() {
         header: "Status",
         accessorKey: "status",
         formatter: (value) => (value === "Active" ? "Active" : "Inactive"),
-      }
+      },
     ],
     data: districts,
     showSerialNumber: true,
@@ -198,19 +203,16 @@ export default function DistrictPage() {
     exportDate: true,
     showTotalCount: true,
     searchQuery: searchQuery || "All districts",
-    userRole: "admin"
+    userRole: "admin",
   }), [districts, searchQuery]);
 
-  useEffect(() => {
-    fetchDistricts(pagination.pageIndex, pagination.pageSize, searchQuery);
-  }, [pagination.pageIndex, pagination.pageSize, searchQuery, fetchDistricts]);
-
   /* ============================================
-     SEARCH HANDLING
+     SEARCH HANDLING - Fixed
   ============================================ */
   const handleSearch = useCallback((query: string) => {
-    setSearchQuery(query);
-    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+    setSearchQuery(query.trim());
+    // Reset to first page when searching
+    setPagination({ pageIndex: 0, pageSize: 10 });
   }, []);
 
   /* ============================================
@@ -318,17 +320,20 @@ export default function DistrictPage() {
   );
 
   /* ============================================
-    EDIT 
+    EDIT - With Fresh Data Fetch
   ============================================ */
   const handleEdit = useCallback(
     async (row: DistrictRow) => {
       try {
+        setIsLoadingDistrictDetail(true);
+
         const rowId = row.id ?? row.district_id;
         if (!rowId) {
           showToast("Invalid district id", "error");
           return;
         }
 
+        // ✅ FETCH FRESH DATA FROM API
         const freshDistrict = await fetchDistrictById(rowId);
         if (!freshDistrict) return;
 
@@ -350,8 +355,12 @@ export default function DistrictPage() {
         ]);
 
         setIsEditModalOpen(true);
-      } catch {
+        showToast("District details loaded successfully!", "success");
+      } catch (error) {
+        console.error("Error in handleEdit:", error);
         showToast("Failed to load edit form", "error");
+      } finally {
+        setIsLoadingDistrictDetail(false);
       }
     },
     [fetchDistrictById, showToast]
@@ -382,8 +391,6 @@ export default function DistrictPage() {
           min_distance: Number(formData.min_distance),
           status: formData.status ?? editingDistrict.status ?? "Active",
         };
-
-        console.log("Update payload:", payload);
 
         await api.put(`/districts/${idForUpdate}`, payload);
         await fetchDistricts(pagination.pageIndex, pagination.pageSize, searchQuery);
@@ -546,10 +553,28 @@ export default function DistrictPage() {
         placeholder:
           states.length === 0 ? "Select country first" : "Select state",
       },
-      { name: "district_name", label: "District (English)", type: "text", required: true },
-      { name: "district_name_marathi", label: "District (Marathi)", type: "text" },
-      { name: "district_name_hindi", label: "District (Hindi)", type: "text" },
-      { name: "min_distance", label: "Distance (km)", type: "number", required: true },
+      {
+        name: "district_name",
+        label: "District (English)",
+        type: "text",
+        required: true,
+      },
+      {
+        name: "district_name_marathi",
+        label: "District (Marathi)",
+        type: "text",
+      },
+      {
+        name: "district_name_hindi",
+        label: "District (Hindi)",
+        type: "text",
+      },
+      {
+        name: "min_distance",
+        label: "Distance (km)",
+        type: "number",
+        required: true,
+      },
     ],
     [countries, states, handleCountryDropdownClick, fetchStatesByCountry]
   );
@@ -583,8 +608,9 @@ export default function DistrictPage() {
             <button
               onClick={() => handleEdit(row.original)}
               className="px-3 py-1 bg-blue-100 rounded hover:bg-blue-200 transition-colors"
+              disabled={isLoadingDistrictDetail}
             >
-              Edit
+              {isLoadingDistrictDetail ? "Loading..." : "Edit"}
             </button>
 
             <AlertPopover
@@ -602,7 +628,7 @@ export default function DistrictPage() {
         ),
       },
     ],
-    [handleEdit, handleDeleteConfirm]
+    [handleEdit, handleDeleteConfirm, isLoadingDistrictDetail]
   );
 
   /* ============================================
@@ -621,6 +647,7 @@ export default function DistrictPage() {
     serialNumberHeader: "S.NO.",
     maxHeight: "500px",
     emptyMessage: "No districts available",
+    manualPagination: true,
     getRowId: (row) => row.id,
   });
 
@@ -665,7 +692,7 @@ export default function DistrictPage() {
       <div className="mt-6">
         <div className="flex justify-between items-center mb-4 gap-4 flex-wrap">
           <div className="flex items-center gap-3">
-            <ExportButtons 
+            <ExportButtons
               pdfConfig={pdfExportConfig}
               excelConfig={excelExportConfig}
             />
@@ -676,15 +703,10 @@ export default function DistrictPage() {
             <SearchComponent
               placeholder="Search Districts..."
               debounceDelay={400}
-              serverSideSearch={true}  
-              onSearch={async (query: string) => {
-                setSearchQuery(query.trim());
-                setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-                return [];
-              }}
+              serverSideSearch={true}
+              onSearch={handleSearch}
             />
           </div>
-
         </div>
 
         {tableElement}
@@ -698,6 +720,10 @@ export default function DistrictPage() {
           setEditStates([]);
         }}
         onSubmit={handleUpdateDistrict}
+        isLoading={isLoadingDistrictDetail}
+        loadingMessage={
+          isLoadingDistrictDetail ? "Loading district details..." : undefined
+        }
         title={`Edit District ${editingDistrict ? `- ${editingDistrict.district_name}` : ""}`}
         fields={editModalFields}
         onFieldChange={handleEditFieldChange}

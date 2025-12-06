@@ -1,13 +1,10 @@
 "use client";
-export const dynamic = "force-dynamic";
-export const fetchCache = "force-no-store";
-export const revalidate = 0;
+
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import PoliceStationInfoCard from "@/component/ui/PoliceStationView/PoliceStationInfoCard";
 import PoliceStationTabs from "@/component/ui/PoliceStationView/PoliceStationTabs";
 import { api } from "@/services/api/apiServices";
-
 
 interface PoliceStationDetails {
   id: number;
@@ -25,7 +22,7 @@ interface PoliceStationDetails {
   image_url?: string;
 }
 
-export default function PoliceStationViewPage() {
+function PoliceStationViewPageComponent() {
   const searchParams = useSearchParams();
   const policeStationId = searchParams.get("id");
 
@@ -88,9 +85,19 @@ export default function PoliceStationViewPage() {
         </div>
 
         <div className="lg:col-span-8">
+
           <PoliceStationTabs policeStationId={parseInt(policeStationId)} />
+
         </div>
       </div>
     </div>
   );
+}
+
+export default function PoliceStationViewPage() {
+  return (
+    <Suspense>
+      <PoliceStationViewPageComponent />
+    </Suspense>
+  )
 }
