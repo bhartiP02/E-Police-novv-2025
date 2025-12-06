@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { CustomTable, ColumnDef, PaginationState, SortingState } from "@/component/ui/Table/CustomTable";
 import AddSection, { FieldConfig } from "@/component/ui/add-section/add-section";
