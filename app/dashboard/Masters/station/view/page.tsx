@@ -1,5 +1,6 @@
 "use client";
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import PoliceStationInfoCard from "@/component/ui/PoliceStationView/PoliceStationInfoCard";
