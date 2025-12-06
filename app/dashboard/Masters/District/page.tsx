@@ -15,6 +15,7 @@ import { ColumnVisibilitySelector } from "@/component/ui/Column-Visibility/colum
 import { AlertPopover, Toast } from "@/component/ui/AlertPopover";
 import EditModal from "@/component/ui/EditModal/editModal";
 import { useExportPdf, ExportPdfOptions } from "@/hook/UseExportPdf/useExportPdf";
+import { useExportExcel, ExportExcelOptions } from "@/hook/UseExportExcel/useExportExcel";
 
 
 /* ============================================
@@ -50,7 +51,6 @@ interface State {
 ============================================ */
 export default function DistrictPage() {
   const [districts, setDistricts] = useState<DistrictRow[]>([]);
-  // const [filteredDistricts, setFilteredDistricts] = useState<DistrictRow[]>([]);
   const [countries, setCountries] = useState<Country[]>([]);
   const [states, setStates] = useState<State[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,6 +75,7 @@ export default function DistrictPage() {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [totalCount, setTotalCount] = useState(0);
   const { exportToPdf } = useExportPdf();
+  const { exportToExcel } = useExportExcel();
 
   /* ============================================
      TOAST
@@ -108,7 +109,7 @@ export default function DistrictPage() {
         const validatedRows: DistrictRow[] = rows.map((district: any) => {
           const id = district.id ?? district.district_id;
           return {
-            id, // normalized
+            id,
             district_id: district.district_id ?? id,
             country_id: district.country_id ?? 0,
             state_id: district.state_id ?? 0,
@@ -123,8 +124,6 @@ export default function DistrictPage() {
         });
 
         setDistricts(validatedRows);
-        // setFilteredDistricts(validatedRows);
-
         setTotalCount(
           response?.totalRecords ??
           response?.totalCount ??
@@ -141,15 +140,16 @@ export default function DistrictPage() {
     [showToast]
   );
 
+  /* ============================================
+     PDF EXPORT CONFIG
+  ============================================ */
   const pdfExportConfig: ExportPdfOptions = useMemo(() => ({
     filename: `districts-master-report-${new Date()
       .toLocaleDateString("en-GB")
       .replace(/\//g, "-")}.pdf`,
-
     title: "Districts Master Report",
     orientation: "landscape",
     pageSize: "a4",
-
     columns: [
       { header: "District Name", accessorKey: "district_name" },
       { header: "Country", accessorKey: "country_name" },
@@ -161,7 +161,6 @@ export default function DistrictPage() {
         formatter: (value) => (value === "Active" ? "Active" : "Inactive"),
       }
     ],
-
     data: districts,
     showSerialNumber: true,
     serialNumberHeader: "S.NO.",
@@ -172,6 +171,35 @@ export default function DistrictPage() {
     userRole: "admin"
   }), [districts, searchQuery]);
 
+  /* ============================================
+     EXCEL EXPORT CONFIG
+  ============================================ */
+  const excelExportConfig: ExportExcelOptions = useMemo(() => ({
+    filename: `districts-master-report-${new Date()
+      .toLocaleDateString("en-GB")
+      .replace(/\//g, "-")}.xlsx`,
+    sheetName: "Districts",
+    title: "Districts Master Report",
+    columns: [
+      { header: "District Name", accessorKey: "district_name" },
+      { header: "Country", accessorKey: "country_name" },
+      { header: "State", accessorKey: "state_name" },
+      { header: "Distance (km)", accessorKey: "min_distance" },
+      {
+        header: "Status",
+        accessorKey: "status",
+        formatter: (value) => (value === "Active" ? "Active" : "Inactive"),
+      }
+    ],
+    data: districts,
+    showSerialNumber: true,
+    serialNumberHeader: "S.NO.",
+    projectName: "E-Police",
+    exportDate: true,
+    showTotalCount: true,
+    searchQuery: searchQuery || "All districts",
+    userRole: "admin"
+  }), [districts, searchQuery]);
 
   useEffect(() => {
     fetchDistricts(pagination.pageIndex, pagination.pageSize, searchQuery);
@@ -184,30 +212,6 @@ export default function DistrictPage() {
     setSearchQuery(query);
     setPagination((prev) => ({ ...prev, pageIndex: 0 }));
   }, []);
-
-  // const handleClientSearch = useCallback(
-  //   (query: string) => {
-  //     if (!query.trim()) {
-  //       setFilteredDistricts(districts);
-  //     } else {
-  //       const lower = query.toLowerCase();
-  //       setFilteredDistricts(
-  //         districts.filter(
-  //           (district) =>
-  //             district.district_name.toLowerCase().includes(lower) ||
-  //             district.country_name?.toLowerCase().includes(lower) ||
-  //             district.state_name?.toLowerCase().includes(lower) ||
-  //             district.district_name_marathi?.toLowerCase().includes(lower) ||
-  //             district.district_name_hindi?.toLowerCase().includes(lower) ||
-  //             district.distance.toString().includes(query)
-  //         )
-  //       );
-  //     }
-
-  //     setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-  //   },
-  //   [districts]
-  // );
 
   /* ============================================
      FETCH COUNTRIES & STATES
@@ -262,11 +266,9 @@ export default function DistrictPage() {
           district_name_marathi: form.district_name_marathi,
           district_name_hindi: form.district_name_hindi,
           min_distance: Number(form.min_distance),
-          // status: "Active",
         };
 
         await api.post("/districts", payload);
-
         fetchDistricts(pagination.pageIndex, pagination.pageSize, searchQuery);
         showToast("District added successfully!", "success");
       } catch (error: any) {
@@ -339,7 +341,6 @@ export default function DistrictPage() {
           },
         ]);
 
-        // Inject only selected state (so dropdown shows current value)
         setEditStates([
           {
             id: freshDistrict.state_id,
@@ -348,7 +349,6 @@ export default function DistrictPage() {
           },
         ]);
 
-        // Open modal
         setIsEditModalOpen(true);
       } catch {
         showToast("Failed to load edit form", "error");
@@ -357,15 +357,13 @@ export default function DistrictPage() {
     [fetchDistrictById, showToast]
   );
 
-
   /* ============================================
-     UPDATE DISTRICT  ✅ ID & district_id fixed
+     UPDATE DISTRICT
   ============================================ */
   const handleUpdateDistrict = useCallback(
     async (formData: any) => {
       if (!editingDistrict) return;
 
-      // pick id from either `id` or `district_id`
       const idForUpdate = editingDistrict.id ?? editingDistrict.district_id;
 
       if (!idForUpdate) {
@@ -375,7 +373,7 @@ export default function DistrictPage() {
 
       try {
         const payload = {
-          district_id: idForUpdate, // in body (if backend needs it)
+          district_id: idForUpdate,
           country_id: Number(formData.country_id),
           state_id: Number(formData.state_id),
           district_name: formData.district_name,
@@ -385,11 +383,9 @@ export default function DistrictPage() {
           status: formData.status ?? editingDistrict.status ?? "Active",
         };
 
-        console.log(" Update payload:", payload);
+        console.log("Update payload:", payload);
 
         await api.put(`/districts/${idForUpdate}`, payload);
-
-        // Wait for the fetch to complete before closing modal
         await fetchDistricts(pagination.pageIndex, pagination.pageSize, searchQuery);
 
         setIsEditModalOpen(false);
@@ -515,7 +511,6 @@ export default function DistrictPage() {
     ];
   }, [editingDistrict, countries, editStates, fetchCountries, fetchStatesByCountry]);
 
-
   /* ============================================
      ADD SECTION FIELDS
   ============================================ */
@@ -637,9 +632,18 @@ export default function DistrictPage() {
       if (fieldName === "country_id") {
         const statesData = await fetchStatesByCountry(value);
         setEditStates(statesData);
-        return { ...formData, state_id: "" };
+
+        return {
+          ...formData,
+          country_id: value,
+          state_id: "",
+        };
       }
-      return formData;
+
+      return {
+        ...formData,
+        [fieldName]: value,
+      };
     },
     [fetchStatesByCountry]
   );
@@ -661,22 +665,26 @@ export default function DistrictPage() {
       <div className="mt-6">
         <div className="flex justify-between items-center mb-4 gap-4 flex-wrap">
           <div className="flex items-center gap-3">
-            <ExportButtons pdfConfig={pdfExportConfig} />
+            <ExportButtons 
+              pdfConfig={pdfExportConfig}
+              excelConfig={excelExportConfig}
+            />
             <ColumnVisibilitySelector columns={table.getAllColumns()} />
           </div>
 
-          <div className="w-full max-w-xs">
+          <div className="w-64">
             <SearchComponent
-              placeholder="Search districts..."
+              placeholder="Search Districts..."
               debounceDelay={400}
+              serverSideSearch={true}  
               onSearch={async (query: string) => {
-                handleSearch(query);
-                return []; // return an empty array because serverSideSearch=false
+                setSearchQuery(query.trim());
+                setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+                return [];
               }}
-              // onClientSearch={handleClientSearch}
-              serverSideSearch={false}
             />
           </div>
+
         </div>
 
         {tableElement}

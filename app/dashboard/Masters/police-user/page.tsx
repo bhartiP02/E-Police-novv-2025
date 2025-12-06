@@ -8,10 +8,105 @@ import SearchComponent from "@/component/ui/SearchBar/searchBar";
 import { ExportButtons } from "@/component/ui/Export-Buttons/export-Buttons";
 import { ColumnVisibilitySelector } from "@/component/ui/Column-Visibility/column-visibility";
 import { AlertPopover, Toast } from "@/component/ui/AlertPopover";
+import EditModal from "@/component/ui/EditModal/editModal";
+import { useExportPdf, ExportPdfOptions } from "@/hook/UseExportPdf/useExportPdf";
 
-interface PoliceUserRow {
+// Helper function to compress image
+const compressImage = async (file: File, maxSizeKB = 10): Promise<File> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Calculate new dimensions (max 300px while maintaining aspect ratio)
+        const MAX_WIDTH = 300;
+        const MAX_HEIGHT = 300;
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Draw and compress
+        ctx?.drawImage(img, 0, 0, width, height);
+        
+        // Convert to blob with compression
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error('Canvas to Blob conversion failed'));
+              return;
+            }
+            
+            // Check if compressed size is within limits
+            if (blob.size <= maxSizeKB * 1024) {
+              const compressedFile = new File([blob], file.name, {
+                type: 'image/jpeg',
+                lastModified: Date.now(),
+              });
+              resolve(compressedFile);
+            } else {
+              // If still too large, reduce quality further
+              canvas.toBlob(
+                (finalBlob) => {
+                  if (!finalBlob) {
+                    reject(new Error('Final compression failed'));
+                    return;
+                  }
+                  const finalFile = new File([finalBlob], file.name, {
+                    type: 'image/jpeg',
+                    lastModified: Date.now(),
+                  });
+                  resolve(finalFile);
+                },
+                'image/jpeg',
+                0.5 // Further reduce quality to 50%
+              );
+            }
+          },
+          'image/jpeg',
+          0.7 // Initial quality 70%
+        );
+      };
+      img.onerror = reject;
+    };
+    reader.onerror = reject;
+  });
+};
+
+// Interfaces
+interface DropdownItem {
   id: number;
-  name: string;
+  name?: string;
+  police_name?: string;
+  state_name?: string;
+  district_name?: string;
+  city_name?: string;
+  station_name?: string;
+  country_name?: string;
+  [key: string]: any;
+}
+
+interface PoliceUserRow extends Record<string, any> {
+  id: number;
+  police_name: string;
   email: string;
   mobile: string;
   designation_type: string;
@@ -26,834 +121,1315 @@ interface PoliceUserRow {
   buckal_number: string;
   address: string;
   image_url?: string;
+  image?: string;
+  sdpo_name?: string;
+  station_name?: string;
   status?: string;
   district_id?: number;
   city_id?: number;
+  state_id?: number;
+  country_id?: number;
+  country_name?: string;
+  sdpo_id?: number;
+  station_id?: number;
 }
 
-interface Country {
-  id: number;
-  country_name: string;
-}
-
-interface State {
-  id: number;
-  state_name: string;
-  country_id: number;
-}
-
-interface District {
-  id: number;
-  district_name: string;
-  state_id: number;
-}
-
-interface City {
-  id: number;
-  city_name: string;
-  district_id: number;
-}
-
-interface Designation {
-  id: number;
-  name: string;
-  type: string;
-}
-
-interface EditFormData {
-  name: string;
-  email: string;
-  mobile: string;
-  password: string;
-  designation_type: string;
-  designation_name: string;
-  gender: string;
-  country_id: string;
-  state_id: string;
-  district_id: string;
-  city_id: string;
-  pincode: string;
-  aadhar_number: string;
-  pan_number: string;
-  buckal_number: string;
-  address: string;
-  status: string;
-}
+// Helper function to extract data from API responses
+const extractData = (response: any, keys: string[] = ['data', 'data', 'result']) => {
+  for (const key of keys) {
+    if (Array.isArray(response?.[key])) {
+      return response[key];
+    }
+  }
+  return Array.isArray(response) ? response : [];
+};
 
 export default function PoliceUserPage() {
+  // Main state
   const [policeUsers, setPoliceUsers] = useState<PoliceUserRow[]>([]);
-  const [filteredPoliceUsers, setFilteredPoliceUsers] = useState<PoliceUserRow[]>([]);
-  const [countries, setCountries] = useState<Country[]>([]);
-  const [states, setStates] = useState<State[]>([]);
-  const [districts, setDistricts] = useState<District[]>([]);
-  const [cities, setCities] = useState<City[]>([]);
-  const [designations, setDesignations] = useState<Designation[]>([]);
-  const [filteredStates, setFilteredStates] = useState<State[]>([]);
-  const [filteredDistricts, setFilteredDistricts] = useState<District[]>([]);
-  const [filteredCities, setFilteredCities] = useState<City[]>([]);
-  const [filteredDesignations, setFilteredDesignations] = useState<Designation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingPoliceUser, setEditingPoliceUser] = useState<PoliceUserRow | null>(null);
   const [saveLoading, setSaveLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isClient, setIsClient] = useState(false);
 
-  // Loading states for lazy loading
+  // Country state (separate from other dropdowns)
+  const [countries, setCountries] = useState<DropdownItem[]>([]);
   const [isCountriesLoading, setIsCountriesLoading] = useState(false);
-  const [isStatesLoading, setIsStatesLoading] = useState(false);
-  const [isDistrictsLoading, setIsDistrictsLoading] = useState(false);
-  const [isCitiesLoading, setIsCitiesLoading] = useState(false);
-  const [isDesignationsLoading, setIsDesignationsLoading] = useState(false);
-  const [countriesLoaded, setCountriesLoaded] = useState(false);
-  const [statesLoaded, setStatesLoaded] = useState(false);
-  const [designationsLoaded, setDesignationsLoaded] = useState(false);
+
+  // Dropdown data state
+  const [dropdownData, setDropdownData] = useState({
+    states: [] as DropdownItem[],
+    districts: [] as DropdownItem[],
+    cities: [] as DropdownItem[],
+    designations: [] as DropdownItem[],
+    sdpo: [] as DropdownItem[],
+    policeStations: [] as DropdownItem[],
+  });
+
+  // Filtered dropdown data for cascading - initialized with empty arrays
+  const [filteredData, setFilteredData] = useState({
+    states: [] as DropdownItem[],
+    districts: [] as DropdownItem[],
+    cities: [] as DropdownItem[],
+    designations: [] as DropdownItem[],
+    sdpo: [] as DropdownItem[],
+    policeStations: [] as DropdownItem[],
+  });
+
+  // Loading states
+  const [isLoading, setIsLoading] = useState({
+    states: false,
+    districts: false,
+    cities: false,
+    designations: false,
+    sdpo: false,
+    policeStations: false,
+  });
+
+  const [loaded, setLoaded] = useState({
+    states: false,
+    designations: false,
+    sdpo: false,
+    policeStations: false,
+  });
 
   // Current selected IDs for cascading dropdowns
-  const [currentCountryId, setCurrentCountryId] = useState<string>("");
-  const [currentStateId, setCurrentStateId] = useState<string>("");
-  const [currentDistrictId, setCurrentDistrictId] = useState<string>("");
-  const [currentDesignationType, setCurrentDesignationType] = useState<string>("");
-
-  // Toast notification state
-  const [toast, setToast] = useState<{ isVisible: boolean; message: string; type: "success" | "error" }>({
-    isVisible: false,
-    message: "",
-    type: "success"
+  const [selectedIds, setSelectedIds] = useState({
+    country: "",
+    state: "",
+    district: "",
+    sdpo: "",
+    designationType: "",
   });
 
-  // Pagination & Sorting State
-  const [pagination, setPagination] = useState<PaginationState>({
-    pageIndex: 0,
-    pageSize: 10,
-  });
+  // Image state
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>("");
+
+  // Toast state
+  const [toast, setToast] = useState({ isVisible: false, message: "", type: "success" as "success" | "error" });
+
+  // Column visibility
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
+
+  // Pagination & Sorting
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
   const [sorting, setSorting] = useState<SortingState>([]);
   const [totalCount, setTotalCount] = useState(0);
 
-  // Initialize edit form data
-  const [editFormData, setEditFormData] = useState<EditFormData>({
-    name: "",
-    email: "",
-    mobile: "",
-    password: "",
-    designation_type: "",
-    designation_name: "",
-    gender: "Male",
-    country_id: "",
-    state_id: "",
-    district_id: "",
-    city_id: "",
-    pincode: "",
-    aadhar_number: "",
-    pan_number: "",
-    buckal_number: "",
-    address: "",
-    status: "Active"
+  // Edit form data
+  const [editFormData, setEditFormData] = useState<Record<string, any>>({
+    police_name: "", email: "", mobile: "", password: "", designation_type: "", designation_id: "",
+    gender: "Male", country_id: "", state_id: "", district_id: "", city_id: "", sdpo_id: "",
+    police_station_id: "", pincode: "", aadhar_number: "", pan_number: "", buckal_number: "",
+    address: "", status: "Active", image: "", department_id: "2"
   });
 
-  // -----------------------------
-  // Toast Helper Function
-  // -----------------------------
+  // Export PDF hook
+  const { exportToPdf } = useExportPdf();
+
+  // Helper functions
   const showToast = useCallback((message: string, type: "success" | "error") => {
     setToast({ isVisible: true, message, type });
-    setTimeout(() => {
-      setToast({ isVisible: false, message: "", type: "success" });
-    }, 3000);
+    setTimeout(() => setToast({ isVisible: false, message: "", type: "success" }), 3000);
   }, []);
 
-  // ============================================
-  // TABLE COLUMNS DEFINITION
-  // ============================================
-  const columns: ColumnDef<PoliceUserRow>[] = useMemo(() => [
-    {
-      accessorKey: "name",
-      header: "Name",
-      cell: ({ row }) => <span className="font-medium text-black">{row.original.name}</span>,
-      enableSorting: true,
-    },
-    {
-      accessorKey: "email",
-      header: "Email",
-      cell: ({ row }) => <span className="text-black">{row.original.email}</span>,
-      enableSorting: true,
-    },
-    {
-      accessorKey: "mobile",
-      header: "Mobile",
-      cell: ({ row }) => <span className="text-black">{row.original.mobile}</span>,
-      enableSorting: true,
-    },
-    {
-      accessorKey: "designation_type",
-      header: "Designation Type",
-      cell: ({ row }) => <span className="text-black">{row.original.designation_type}</span>,
-      enableSorting: true,
-    },
-    {
-      accessorKey: "designation_name",
-      header: "Designation Name",
-      cell: ({ row }) => <span className="text-black">{row.original.designation_name}</span>,
-      enableSorting: true,
-    },
-    {
-      accessorKey: "district_name",
-      header: "District",
-      cell: ({ row }) => <span className="text-black">{row.original.district_name || "N/A"}</span>,
-      enableSorting: true,
-    },
-    {
-      id: "actions",
-      header: "Actions",
-      cell: ({ row }) => (
-        <div className="flex gap-2 justify-center">
-          <button
-            onClick={() => handleEdit(row.original)}
-            className="px-3 py-1 rounded-md text-sm bg-blue-100 text-black hover:bg-blue-200"
-          >
-            Edit
-          </button>
-          
-          {/* Delete Button with AlertPopover */}
-          <AlertPopover
-            trigger={
-              <button
-                className="px-3 py-1 rounded-md text-sm bg-red-100 text-red-700 hover:bg-red-200"
-              >
-                Delete
-              </button>
-            }
-            title="Are you sure you want to delete this Police User?"
-            okText="OK"
-            cancelText="Cancel"
-            okButtonColor="#9A65C2"
-            cancelButtonColor="#6B7280"
-            successMessage="Record deleted successfully"
-            errorMessage="Failed to delete record. Please try again."
-            onConfirm={() => handleDeleteConfirm(row.original.id)}
-          />
-        </div>
-      ),
-      enableSorting: false,
-    },
-  ], []);
+  const createFieldProps = (customProps: any = {}) => ({
+    className: "w-full border border-gray-300 rounded-md px-3 py-2 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 placeholder:text-gray-400",
+    ...customProps
+  });
 
-  // ============================================
-  // DATA EXTRACTION FUNCTIONS
-  // ============================================
-  const extractPoliceUserData = useCallback((response: any): PoliceUserRow[] => {
-    if (Array.isArray(response?.data?.data)) return response.data.data;
-    if (Array.isArray(response?.data?.result)) return response.data.result;
-    if (Array.isArray(response?.data)) return response.data;
-    if (Array.isArray(response)) return response;
-    return [];
+  // Generic API fetch function for other dropdowns
+  const fetchDropdownData = useCallback(async (endpoint: string, key: keyof typeof dropdownData) => {
+    try {
+      setIsLoading(prev => ({ ...prev, [key]: true }));
+      const response = await api.get(endpoint);
+      const data = extractData(response);
+      setDropdownData(prev => ({ ...prev, [key]: data }));
+      setLoaded(prev => ({ ...prev, [key]: true }));
+      return data;
+    } catch (error) {
+      console.error(`Error fetching ${key}:`, error);
+      showToast(`Failed to load ${key}`, "error");
+      return [];
+    } finally {
+      setIsLoading(prev => ({ ...prev, [key]: false }));
+    }
+  }, [showToast]);
+
+  // Fetch by parent ID
+  const fetchByParentId = useCallback(async (endpoint: string, parentId: string, filterKey: keyof typeof filteredData) => {
+    if (!parentId) {
+      setFilteredData(prev => ({ ...prev, [filterKey]: [] }));
+      return [];
+    }
+    try {
+      setIsLoading(prev => ({ ...prev, [filterKey]: true }));
+      const response = await api.get(endpoint);
+      const data = extractData(response);
+      setFilteredData(prev => ({ ...prev, [filterKey]: data }));
+      return data;
+    } catch (error) {
+      console.error(`Error fetching ${filterKey}:`, error);
+      setFilteredData(prev => ({ ...prev, [filterKey]: [] }));
+      return [];
+    } finally {
+      setIsLoading(prev => ({ ...prev, [filterKey]: false }));
+    }
   }, []);
 
-  const extractCountryData = useCallback((response: any): Country[] => {
-    if (Array.isArray(response?.data)) return response.data;
-    if (Array.isArray(response?.data?.data)) return response.data.data;
-    if (Array.isArray(response)) return response;
-    return [];
-  }, []);
-
-  const extractStateData = useCallback((response: any): State[] => {
-    if (Array.isArray(response?.data)) return response.data;
-    if (Array.isArray(response?.data?.data)) return response.data.data;
-    if (Array.isArray(response)) return response;
-    return [];
-  }, []);
-
-  const extractDistrictData = useCallback((response: any): District[] => {
-    if (Array.isArray(response?.data)) return response.data;
-    if (Array.isArray(response?.data?.data)) return response.data.data;
-    if (Array.isArray(response)) return response;
-    return [];
-  }, []);
-
-  const extractCityData = useCallback((response: any): City[] => {
-    if (Array.isArray(response?.data)) return response.data;
-    if (Array.isArray(response?.data?.data)) return response.data.data;
-    if (Array.isArray(response)) return response;
-    return [];
-  }, []);
-
-  const extractDesignationData = useCallback((response: any): Designation[] => {
-    if (Array.isArray(response?.data)) return response.data;
-    if (Array.isArray(response?.data?.data)) return response.data.data;
-    if (Array.isArray(response)) return response;
-    return [];
-  }, []);
-
-  // ============================================
-  // API FUNCTIONS
-  // ============================================
+  // Country fetch function - called only on click
   const fetchCountries = useCallback(async () => {
     try {
       setIsCountriesLoading(true);
-      const response = await api.get("/states/getcountry");
-      const countriesData = extractCountryData(response);
-      setCountries(countriesData);
-      setCountriesLoaded(true);
+      const response = await api.get('/states/getcountry');
+      const data = extractData(response);
+      setCountries(data);
     } catch (error) {
       console.error("Error fetching countries:", error);
+      showToast("Failed to load countries", "error");
     } finally {
       setIsCountriesLoading(false);
     }
-  }, [extractCountryData]);
+  }, [showToast]);
 
-  const fetchAllStates = useCallback(async () => {
-    try {
-      setIsStatesLoading(true);
-      const response = await api.get("/states");
-      const statesData = extractStateData(response);
-      setStates(statesData);
-      setStatesLoaded(true);
-    } catch (error) {
-      console.error("Error fetching all states:", error);
-    } finally {
-      setIsStatesLoading(false);
-    }
-  }, [extractStateData]);
-
-  const fetchStatesByCountry = useCallback(async (countryId: string) => {
-    if (!countryId) {
-      setFilteredStates([]);
-      return [];
-    }
-    try {
-      setIsStatesLoading(true);
-      const response = await api.get(`/states/country/${countryId}`);
-      const statesData = extractStateData(response);
-      setFilteredStates(statesData);
-      return statesData;
-    } catch (error) {
-      console.error("Error fetching states:", error);
-      setFilteredStates([]);
-      return [];
-    } finally {
-      setIsStatesLoading(false);
-    }
-  }, [extractStateData]);
-
-  const fetchDistrictsByState = useCallback(async (stateId: string) => {
-    if (!stateId) {
-      setFilteredDistricts([]);
-      return [];
-    }
-    try {
-      setIsDistrictsLoading(true);
-      const response = await api.get(`/districts/state/${stateId}`);
-      const districtData = extractDistrictData(response);
-      setFilteredDistricts(districtData);
-      return districtData;
-    } catch (error) {
-      console.error("Error fetching districts:", error);
-      setFilteredDistricts([]);
-      return [];
-    } finally {
-      setIsDistrictsLoading(false);
-    }
-  }, [extractDistrictData]);
-
-  const fetchCitiesByDistrict = useCallback(async (districtId: string) => {
-    if (!districtId) {
-      setFilteredCities([]);
-      return [];
-    }
-    try {
-      setIsCitiesLoading(true);
-      const response = await api.get(`/cities/district/${districtId}`);
-      const citiesData = extractCityData(response);
-      setFilteredCities(citiesData);
-      return citiesData;
-    } catch (error) {
-      console.error("Error fetching cities:", error);
-      setFilteredCities([]);
-      return [];
-    } finally {
-      setIsCitiesLoading(false);
-    }
-  }, [extractCityData]);
-
-  const fetchDesignations = useCallback(async () => {
-    try {
-      setIsDesignationsLoading(true);
-      const response = await api.get("/designations");
-      const designationsData = extractDesignationData(response);
-      setDesignations(designationsData);
-      setDesignationsLoaded(true);
-    } catch (error) {
-      console.error("Error fetching designations:", error);
-    } finally {
-      setIsDesignationsLoading(false);
-    }
-  }, [extractDesignationData]);
-
-  const fetchDesignationsByType = useCallback(async (type: string) => {
-    if (!type) {
-      setFilteredDesignations([]);
-      return [];
-    }
-    try {
-      setIsDesignationsLoading(true);
-      const response = await api.get(`/designations/type/${type}`);
-      const designationsData = extractDesignationData(response);
-      setFilteredDesignations(designationsData);
-      return designationsData;
-    } catch (error) {
-      console.error("Error fetching designations by type:", error);
-      setFilteredDesignations([]);
-      return [];
-    } finally {
-      setIsDesignationsLoading(false);
-    }
-  }, [extractDesignationData]);
-
-  // ============================================
-  // LAZY LOADING HANDLERS
-  // ============================================
+  // Handler for country dropdown click
   const handleCountryDropdownClick = useCallback(async () => {
-    if (!isCountriesLoading && !countriesLoaded) {
-      await fetchCountries();
-    }
-  }, [isCountriesLoading, countriesLoaded, fetchCountries]);
+    if (!isClient || isCountriesLoading || countries.length > 0) return;
+    await fetchCountries();
+  }, [isClient, isCountriesLoading, countries.length, fetchCountries]);
 
-  const handleStateDropdownClick = useCallback(async () => {
-    if (!isStatesLoading && !statesLoaded) {
-      await fetchAllStates();
-    }
-  }, [isStatesLoading, statesLoaded, fetchAllStates]);
-
-  const handleDistrictDropdownClick = useCallback(async () => {
-    if (!currentStateId || isDistrictsLoading) return;
-    await fetchDistrictsByState(currentStateId);
-  }, [currentStateId, isDistrictsLoading, fetchDistrictsByState]);
-
-  const handleCityDropdownClick = useCallback(async () => {
-    if (!currentDistrictId || isCitiesLoading) return;
-    await fetchCitiesByDistrict(currentDistrictId);
-  }, [currentDistrictId, isCitiesLoading, fetchCitiesByDistrict]);
-
-  const handleDesignationDropdownClick = useCallback(async () => {
-    if (!isDesignationsLoading && !designationsLoaded) {
-      await fetchDesignations();
-    }
-  }, [isDesignationsLoading, designationsLoaded, fetchDesignations]);
-
-  const handleDesignationTypeChange = useCallback(async (type: string) => {
-    setCurrentDesignationType(type);
-    if (type) {
-      await fetchDesignationsByType(type);
-    } else {
-      setFilteredDesignations([]);
-    }
-  }, [fetchDesignationsByType]);
-
-  // ============================================
-  // FIELD CONFIGURATION
-  // ============================================
-  const policeUserFields = useMemo((): FieldConfig[] => [
-    {
-      name: 'name',
-      label: 'Name*',
-      type: 'text',
-      placeholder: 'Enter Name',
-      required: true,
-      customProps: {
-        className: "w-full border rounded px-3 py-2 text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-      }
-    },
-    {
-      name: 'password',
-      label: 'Password*',
-      type: 'password',
-      placeholder: 'Enter password',
-      required: true,
-      customProps: {
-        className: "w-full border rounded px-3 py-2 text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-      }
-    },
-    {
-      name: 'mobile',
-      label: 'Mobile*',
-      type: 'text',
-      placeholder: 'Enter mobile no',
-      required: true,
-      customProps: {
-        className: "w-full border rounded px-3 py-2 text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-      }
-    },
-    {
-      name: 'email',
-      label: 'Email*',
-      type: 'email',
-      placeholder: 'Enter email',
-      required: true,
-      customProps: {
-        className: "w-full border rounded px-3 py-2 text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-      }
-    },
-    {
-      name: 'designation_type',
-      label: 'Designation Type',
-      type: 'select',
-      required: true,
-      options: [
-        { value: 'Head Person', label: 'Head Person' },
-        { value: 'Station Head', label: 'Station Head' },
-        { value: 'Police', label: 'Police' }
-      ],
-      placeholder: "Select Designation Type",
-      customProps: {
-        onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
-          const type = e.target.value;
-          handleDesignationTypeChange(type);
-        },
-        className: "w-full border rounded px-3 py-2 text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-      }
-    },
-    {
-      name: 'designation_name',
-      label: 'Designation Name*',
-      type: 'select',
-      required: true,
-      options: filteredDesignations.map(designation => ({
-        value: designation.id.toString(),
-        label: designation.name
-      })),
-      placeholder: isDesignationsLoading ? "Loading designations..." : 
-                 currentDesignationType ? "Select Designation" : "Please select designation type first",
-      customProps: {
-        onMouseDown: handleDesignationDropdownClick,
-        onFocus: handleDesignationDropdownClick,
-        className: "w-full border rounded px-3 py-2 text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-      }
-    },
-    {
-      name: 'gender',
-      label: 'Gender',
-      type: 'select',
-      required: true,
-      options: [
-        { value: 'Male', label: 'Male' },
-        { value: 'Female', label: 'Female' },
-        { value: 'Others', label: 'Others' }
-      ],
-      placeholder: "Select Gender",
-      customProps: {
-        className: "w-full border rounded px-3 py-2 text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-      }
-    },
-    {
-      name: 'country_id',
-      label: 'Country*',
-      type: 'select',
-      required: true,
-      options: countries.map(country => ({
-        value: country.id.toString(),
-        label: country.country_name
-      })),
-      placeholder: isCountriesLoading ? "Loading countries..." : "Select Country",
-      customProps: {
-        onMouseDown: handleCountryDropdownClick,
-        onFocus: handleCountryDropdownClick,
-        onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
-          const countryId = e.target.value;
-          setCurrentCountryId(countryId);
-          setCurrentStateId("");
-          setCurrentDistrictId("");
-          setFilteredStates([]);
-          setFilteredDistricts([]);
-          setFilteredCities([]);
-          if (countryId) fetchStatesByCountry(countryId);
-        },
-        className: "w-full border rounded px-3 py-2 text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-      }
-    },
-    {
-      name: 'state_id',
-      label: 'State*',
-      type: 'select',
-      required: true,
-      options: filteredStates.map(state => ({
-        value: state.id.toString(),
-        label: state.state_name
-      })),
-      placeholder: isStatesLoading ? "Loading states..." : 
-                 currentCountryId ? "Select State" : "Please select country first",
-      customProps: {
-        onMouseDown: handleStateDropdownClick,
-        onFocus: handleStateDropdownClick,
-        onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
-          const stateId = e.target.value;
-          setCurrentStateId(stateId);
-          setCurrentDistrictId("");
-          setFilteredDistricts([]);
-          setFilteredCities([]);
-          if (stateId) fetchDistrictsByState(stateId);
-        },
-        className: "w-full border rounded px-3 py-2 text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-      }
-    },
-    {
-      name: 'district_id',
-      label: 'District*',
-      type: 'select',
-      required: true,
-      options: filteredDistricts.map(district => ({
-        value: district.id.toString(),
-        label: district.district_name
-      })),
-      placeholder: isDistrictsLoading ? "Loading districts..." : 
-                 currentStateId ? "Select District" : "Please select state first",
-      customProps: {
-        onMouseDown: handleDistrictDropdownClick,
-        onFocus: handleDistrictDropdownClick,
-        onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
-          const districtId = e.target.value;
-          setCurrentDistrictId(districtId);
-          setFilteredCities([]);
-          if (districtId) fetchCitiesByDistrict(districtId);
-        },
-        className: "w-full border rounded px-3 py-2 text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-      }
-    },
-    {
-      name: 'city_id',
-      label: 'City*',
-      type: 'select',
-      required: true,
-      options: filteredCities.map(city => ({
-        value: city.id.toString(),
-        label: city.city_name
-      })),
-      placeholder: isCitiesLoading ? "Loading cities..." : 
-                 currentDistrictId ? "Select City" : "Please select district first",
-      customProps: {
-        onMouseDown: handleCityDropdownClick,
-        onFocus: handleCityDropdownClick,
-        className: "w-full border rounded px-3 py-2 text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-      }
-    },
-    {
-      name: 'pincode',
-      label: 'Pincode*',
-      type: 'text',
-      placeholder: 'Enter pincode',
-      required: true,
-      customProps: {
-        className: "w-full border rounded px-3 py-2 text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-      }
-    },
-    {
-      name: 'aadhar_number',
-      label: 'Aadhar Number*',
-      type: 'text',
-      placeholder: 'Enter Aadhar Number',
-      required: true,
-      customProps: {
-        className: "w-full border rounded px-3 py-2 text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-      }
-    },
-    {
-      name: 'pan_number',
-      label: 'Pan Number*',
-      type: 'text',
-      placeholder: 'Enter Pan Number',
-      required: true,
-      customProps: {
-        className: "w-full border rounded px-3 py-2 text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-      }
-    },
-    {
-      name: 'buckal_number',
-      label: 'Buckal Number*',
-      type: 'text',
-      placeholder: 'Enter Buckal Number',
-      required: true,
-      customProps: {
-        className: "w-full border rounded px-3 py-2 text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-      }
-    },
-    {
-      name: 'address',
-      label: 'Address*',
-      type: 'textarea',
-      placeholder: 'Enter address',
-      required: true,
-      rows: 3,   // ✔ moved here
-      customProps: {
-        className: "w-full border rounded px-3 py-2 text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-      }
-    }
-  ], [
-    countries, filteredStates, filteredDistricts, filteredCities, filteredDesignations,
-    isCountriesLoading, isStatesLoading, isDistrictsLoading, isCitiesLoading, isDesignationsLoading,
-    currentCountryId, currentStateId, currentDistrictId, currentDesignationType,
-    handleCountryDropdownClick, handleStateDropdownClick, handleDistrictDropdownClick, 
-    handleCityDropdownClick, handleDesignationDropdownClick, handleDesignationTypeChange,
-    fetchStatesByCountry, fetchDistrictsByState, fetchCitiesByDistrict
-  ]);
-
-  // ============================================
-  // MAIN DATA FETCHING
-  // ============================================
-  const fetchPoliceUsers = useCallback(async () => {
+  // Main data fetching
+  const fetchPoliceUsers = useCallback(async (pageIndex: number, pageSize: number, searchTerm: string = "") => {
     try {
       setLoading(true);
-      setError(null);
-      const res = await api.get("/police-users");
-      const policeUserData = extractPoliceUserData(res);
+      const currentPage = pageIndex + 1;
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: pageSize.toString(),
+        ...(searchTerm.trim() && { search: searchTerm }),
+        ...(sorting.length > 0 && {
+          sortBy: sorting[0].id,
+          sortOrder: sorting[0].desc ? 'desc' : 'asc'
+        })
+      });
 
-      const basicPoliceUserData = policeUserData.map(user => ({
-        ...user,
-        district_name: user.district_name || `District ${user.district_id}`,
-        city_name: user.city_name || (user.city_id ? `City ${user.city_id}` : "N/A")
-      }));
+      const response = await api.get(`/mst-policeall?${params}`);
+      
+      if (response.success) {
+        const policeUserData = response.data || [];
+        const transformedData = policeUserData.map((user: any) => ({
+          id: user.id,
+          police_name: user.police_name || "",
+          email: user.email || "",
+          mobile: user.mobile?.toString() || "",
+          designation_type: user.designation_type || "Police",
+          designation_name: user.designation_name || "Police Officer",
+          gender: user.gender || "Male",
+          state_name: user.state_name || "",
+          district_name: user.district_name || "",
+          city_name: user.city_name || "",
+          pincode: user.pincode || "",
+          aadhar_number: user.aadhar_number || "",
+          pan_number: user.pan_number || "",
+          buckal_number: user.buckal_number || "",
+          address: user.address || "",
+          image: user.image,
+          image_url: user.image_url,
+          sdpo_name: user.sdpo_name,
+          station_name: user.station_name,
+          status: user.status || "Active",
+          district_id: user.district_id,
+          city_id: user.city_id,
+          state_id: user.state_id,
+          country_id: user.country_id,
+          country_name: user.country_name,
+          sdpo_id: user.sdpo_id,
+          station_id: user.station_id
+        }));
 
-      setPoliceUsers(basicPoliceUserData);
-      setFilteredPoliceUsers(basicPoliceUserData);
-      setTotalCount(basicPoliceUserData.length);
+        setPoliceUsers(transformedData);
+        setTotalCount(response.totalRecords || 0);
+      }
     } catch (error) {
       console.error("Error fetching police users:", error);
-      setError("Failed to fetch police users");
+      showToast("Failed to fetch police users", "error");
+      setPoliceUsers([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
-  }, [extractPoliceUserData]);
+  }, [showToast, sorting]);
+
+  // Effects
+  useEffect(() => {
+    fetchPoliceUsers(pagination.pageIndex, pagination.pageSize, searchQuery);
+  }, [fetchPoliceUsers, pagination.pageIndex, pagination.pageSize, searchQuery]);
 
   useEffect(() => {
-    fetchPoliceUsers();
-  }, [fetchPoliceUsers]);
-
-  // ============================================
-  // SEARCH FUNCTIONALITY
-  // ============================================
-  const handleSearchResults = useCallback((results: Record<string, any>[]) => {
-    const sanitized = results as PoliceUserRow[];
-    setFilteredPoliceUsers(sanitized);
-    setTotalCount(sanitized.length);
-    setPagination(prev => ({ ...prev, pageIndex: 0 }));
+    setIsClient(true);
   }, []);
 
+  // Dropdown click handlers
+  const handleDropdownClick = useCallback(async (key: keyof typeof loaded, fetchFunction: () => Promise<any>) => {
+    if (!isClient || isLoading[key as keyof typeof isLoading] || loaded[key]) return;
+    await fetchFunction();
+  }, [isClient, isLoading, loaded]);
 
-  // ============================================
-  // EXPORT HANDLERS
-  // ============================================
-  const handleExportPdf = useCallback(() => {
-    showToast("PDF export functionality - Coming soon!", "success");
-  }, [showToast]);
+  // Image handler with compression
+  const handleImageChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>, mode: 'add' | 'edit') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  const handleExportExcel = useCallback(() => {
-    showToast("Excel export functionality - Coming soon!", "success");
-  }, [showToast]);
-
-  const handlePrint = useCallback(() => {
-    window.print();
-  }, []);
-
-  // ============================================
-  // CRUD OPERATIONS
-  // ============================================
-  const handleAddPoliceUser = useCallback(async (formData: Record<string, string>) => {
     try {
-      // Validate required fields
-      const requiredFields = ['name', 'email', 'mobile', 'password', 'designation_type', 'designation_name', 
-                             'country_id', 'state_id', 'district_id', 'city_id', 'pincode', 'aadhar_number', 
-                             'pan_number', 'buckal_number', 'address'];
-      
-      const missingFields = requiredFields.filter(field => !formData[field]);
-      if (missingFields.length > 0) {
-        showToast(`Please fill all required fields: ${missingFields.join(', ')}`, "error");
+      // Check file size and type before compression
+      if (!file.type.startsWith('image/')) {
+        showToast("Please select an image file", "error");
         return;
       }
 
+      if (file.size > 2 * 1024 * 1024) { // 2MB limit before compression
+        showToast("Image size should be less than 2MB", "error");
+        return;
+      }
+
+      // Show loading state
+      showToast("Compressing image...", "success");
+
+      // Compress image to max 10KB
+      const compressedFile = await compressImage(file, 10);
+      
+      // Verify compression
+      if (compressedFile.size > 15 * 1024) { // Allow slight buffer
+        showToast("Failed to compress image to required size", "error");
+        return;
+      }
+
+      // Update state based on mode
+      if (mode === 'add') {
+        setImageFile(compressedFile);
+      } else {
+        setEditFormData(prev => ({ ...prev, image: compressedFile }));
+      }
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (mode === 'add') {
+          setImagePreview(reader.result as string);
+        }
+        showToast(`Image compressed to ${(compressedFile.size / 1024).toFixed(1)}KB`, "success");
+      };
+      reader.readAsDataURL(compressedFile);
+
+    } catch (error) {
+      console.error("Error processing image:", error);
+      showToast("Failed to process image", "error");
+    }
+  }, [showToast]);
+
+  // Render image upload field
+  const renderImageUploadField = (mode: 'add' | 'edit') => {
+    const currentImage = mode === 'edit' && editingPoliceUser?.image_url
+      ? editingPoliceUser.image_url
+      : imagePreview;
+
+    const hasImage = Boolean(currentImage);
+    const currentFile =
+      mode === 'add'
+        ? imageFile
+        : editFormData.image instanceof File
+        ? editFormData.image
+        : null;
+
+    return (
+      <div className="space-y-2">
+        <div className="flex gap-4">
+          {/* Image Box (Reduced size: 90x90 → 64x64) */}
+          <div className="relative">
+            <div
+              className={`h-17 w-17 rounded-md border ${
+                hasImage ? "border-gray-300" : "border-dashed border-gray-300"
+              } overflow-hidden bg-gray-50 flex items-center justify-center`}
+            >
+              {hasImage ? (
+                <img
+                  src={currentImage}
+                  className="h-full w-full object-cover"
+                  alt="Preview"
+                />
+              ) : (
+                <span className="text-[10px] text-gray-400 text-center px-1">
+                  Upload Image
+                </span>
+              )}
+            </div>
+
+            {/* Upload button (reduced size) */}
+            <label className="block text-xs mt-1 cursor-pointer text-blue-600 text-center hover:underline">
+              <input
+                type="file"
+                accept=".jpg,.png,.jpeg"
+                onChange={(e) => handleImageChange(e, mode)}
+                className="hidden"
+              />
+              {hasImage ? "Change" : "Upload"}
+            </label>
+
+            {/* Remove button (smaller) */}
+            {hasImage && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (mode === "add") {
+                    setImageFile(null);
+                    setImagePreview("");
+                  } else {
+                    setEditFormData((prev) => ({
+                      ...prev,
+                      image: null,
+                      image_url: "",
+                    }));
+                  }
+                }}
+                className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px]"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Info Panel (reduced height, smaller text) */}
+          <div className="flex-1">
+            <div className="bg-blue-50 border border-blue-100 rounded-md p-2">
+              <p className="text-xs font-semibold text-blue-800 mb-1">
+                Image Requirements
+              </p>
+              <ul className="text-[10px] text-gray-600 space-y-0.5">
+                <li>• JPG / PNG / JPEG</li>
+                <li>• Max Size: 10KB (auto-compressed)</li>
+              </ul>
+
+              {/* Selected File Info (smaller) */}
+              {currentFile && (
+                <div className="mt-2 border-t pt-1 border-blue-100">
+                  <p className="text-[10px] text-gray-700 font-medium">
+                    Selected File:
+                  </p>
+                  <p className="text-[10px] text-gray-600 truncate">
+                    {currentFile.name}
+                  </p>
+                  <p className="text-[10px] text-green-600">
+                    Size: {(currentFile.size / 1024).toFixed(1)} KB
+                  </p>
+                </div>
+              )}
+
+              {/* Edit mode existing image info */}
+              {mode === "edit" && editingPoliceUser?.image_url && !currentFile && (
+                <div className="mt-2 border-t pt-1 border-blue-100">
+                  <p className="text-[10px] text-gray-700 font-medium">
+                    Current Image:
+                  </p>
+                  <a
+                    href={editingPoliceUser.image_url}
+                    target="_blank"
+                    className="text-[10px] text-blue-600 underline"
+                  >
+                    View full image
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Dropdown click handlers for edit mode
+  const handleStateDropdownClick = useCallback(async (countryId: string | number, editMode: boolean = false) => {
+    if (!countryId) {
+      if (!editMode) showToast("Please select a country first", "error");
+      return;
+    }
+    const states = await fetchByParentId(`/states/country/${countryId}`, countryId.toString(), "states");
+    return states;
+  }, [fetchByParentId, showToast]);
+
+  const handleDistrictDropdownClick = useCallback(async (stateId: string | number, editMode: boolean = false) => {
+    if (!stateId) {
+      if (!editMode) showToast("Please select a state first", "error");
+      return;
+    }
+    const districts = await fetchByParentId(`/districts/state/${stateId}`, stateId.toString(), "districts");
+    return districts;
+  }, [fetchByParentId, showToast]);
+
+  const handleCityDropdownClick = useCallback(async (districtId: string | number, editMode: boolean = false) => {
+    if (!districtId) {
+      if (!editMode) showToast("Please select a district first", "error");
+      return;
+    }
+    const cities = await fetchByParentId(`/cities/district/${districtId}`, districtId.toString(), "cities");
+    return cities;
+  }, [fetchByParentId, showToast]);
+
+  const handleSDPODropdownClick = useCallback(async (cityId: string | number, editMode: boolean = false) => {
+    if (!cityId) {
+      if (!editMode) showToast("Please select a city first", "error");
+      return;
+    }
+    const sdpos = await fetchByParentId(`/sdpo/city/${cityId}`, cityId.toString(), "sdpo");
+    return sdpos;
+  }, [fetchByParentId, showToast]);
+
+  const handlePoliceStationDropdownClick = useCallback(async (sdpoId: string | number, editMode: boolean = false) => {
+    if (!sdpoId) {
+      if (!editMode) showToast("Please select an SDPO first", "error");
+      return;
+    }
+    const policeStations = await fetchByParentId(`/police-stations/by-sdpo/${sdpoId}`, sdpoId.toString(), "policeStations");
+    return policeStations;
+  }, [fetchByParentId, showToast]);
+
+  // Helper function to find item by id in an array
+  const findItemById = (items: DropdownItem[], id: string | number) => {
+    return items.find(item => item.id.toString() === id.toString());
+  };
+
+  // Function to pre-fetch and pre-populate dropdown data for edit mode
+  const preFetchEditDropdownData = useCallback(async (formData: Record<string, any>) => {
+    try {
+      const newFilteredData = { ...filteredData };
+      
+      // Only fetch countries if not already loaded
+      if (countries.length === 0) {
+        await fetchCountries();
+      }
+      
+      // Fetch states if country_id exists
+      if (formData.country_id) {
+        const states = await handleStateDropdownClick(formData.country_id, true);
+        if (states.length > 0) {
+          newFilteredData.states = states;
+        }
+      }
+      
+      // Fetch districts if state_id exists
+      if (formData.state_id) {
+        const districts = await handleDistrictDropdownClick(formData.state_id, true);
+        if (districts.length > 0) {
+          newFilteredData.districts = districts;
+        }
+      }
+      
+      // Fetch cities if district_id exists
+      if (formData.district_id) {
+        const cities = await handleCityDropdownClick(formData.district_id, true);
+        if (cities.length > 0) {
+          newFilteredData.cities = cities;
+        }
+      }
+      
+      // Fetch SDPOs if city_id exists
+      if (formData.city_id) {
+        const sdpos = await handleSDPODropdownClick(formData.city_id, true);
+        if (sdpos.length > 0) {
+          newFilteredData.sdpo = sdpos;
+        }
+      }
+      
+      // Fetch police stations if sdpo_id exists
+      if (formData.sdpo_id) {
+        const policeStations = await handlePoliceStationDropdownClick(formData.sdpo_id, true);
+        if (policeStations.length > 0) {
+          newFilteredData.policeStations = policeStations;
+        }
+      }
+      
+      // Fetch designations if not loaded
+      if (dropdownData.designations.length === 0) {
+        await fetchDropdownData('/designations', 'designations');
+      } else {
+        newFilteredData.designations = dropdownData.designations;
+      }
+      
+      setFilteredData(newFilteredData);
+      
+      // Add current values as options if they don't exist in the fetched data
+      // This ensures the current value is always selectable
+      const addCurrentValueIfMissing = (data: DropdownItem[], currentId: string, currentName: string) => {
+        if (!currentId) return data;
+        
+        const exists = data.some(item => item.id.toString() === currentId);
+        if (!exists && currentName) {
+          return [
+            ...data,
+            {
+              id: parseInt(currentId),
+              name: currentName,
+              [currentName.toLowerCase().includes('state') ? 'state_name' : 
+               currentName.toLowerCase().includes('district') ? 'district_name' :
+               currentName.toLowerCase().includes('city') ? 'city_name' :
+               currentName.toLowerCase().includes('station') ? 'station_name' : 'name']: currentName
+            }
+          ];
+        }
+        return data;
+      };
+      
+      // Add current values to filtered data
+      setFilteredData(prev => ({
+        ...prev,
+        states: addCurrentValueIfMissing(prev.states, formData.state_id, editingPoliceUser?.state_name || ""),
+        districts: addCurrentValueIfMissing(prev.districts, formData.district_id, editingPoliceUser?.district_name || ""),
+        cities: addCurrentValueIfMissing(prev.cities, formData.city_id, editingPoliceUser?.city_name || ""),
+        sdpo: addCurrentValueIfMissing(prev.sdpo, formData.sdpo_id, editingPoliceUser?.sdpo_name || ""),
+        policeStations: addCurrentValueIfMissing(prev.policeStations, formData.police_station_id, editingPoliceUser?.station_name || "")
+      }));
+      
+    } catch (error) {
+      console.error("Error pre-fetching dropdown data:", error);
+    }
+  }, [
+    filteredData, 
+    countries, 
+    fetchCountries, 
+    handleStateDropdownClick, 
+    handleDistrictDropdownClick, 
+    handleCityDropdownClick, 
+    handleSDPODropdownClick, 
+    handlePoliceStationDropdownClick, 
+    fetchDropdownData, 
+    dropdownData.designations,
+    editingPoliceUser
+  ]);
+
+  // Field configuration
+  const getPoliceUserFields = useCallback((mode: 'add' | 'edit' = 'add'): FieldConfig[] => {
+    const isEditMode = mode === 'edit';
+    const currentFormData = isEditMode ? editFormData : null;
+
+    const baseFields: FieldConfig[] = [
+      { 
+        name: 'police_name', 
+        label: 'Name*', 
+        type: 'text', 
+        placeholder: 'Enter Name', 
+        required: true, 
+        defaultValue: currentFormData?.police_name || "", 
+        customProps: createFieldProps() 
+      },
+      
+      ...(isEditMode ? [] : [
+        { 
+          name: 'password', 
+          label: 'Password*', 
+          type: 'password', 
+          placeholder: 'Enter password', 
+          required: true, 
+          customProps: createFieldProps() 
+        }
+      ]),
+      
+      { 
+        name: 'mobile', 
+        label: 'Mobile*', 
+        type: 'text', 
+        placeholder: 'Enter mobile no', 
+        required: true, 
+        defaultValue: currentFormData?.mobile || "", 
+        customProps: createFieldProps() 
+      },
+      
+      { 
+        name: 'email', 
+        label: 'Email*', 
+        type: 'email', 
+        placeholder: 'Enter email', 
+        required: true, 
+        defaultValue: currentFormData?.email || "", 
+        customProps: createFieldProps() 
+      },
+      
+      // Designation Type
+      {
+        name: 'designation_type', 
+        label: 'Designation Type*', 
+        type: 'select' as const, 
+        required: true,
+        options: [
+          { value: 'SDPO', label: 'SDPO' },
+          { value: 'Head_Person', label: 'Head Person' },
+          { value: 'Station_Head', label: 'Station Head' },
+          { value: 'Police', label: 'Police' },
+          { value: 'Admin', label: 'Admin' }
+        ],
+        defaultValue: currentFormData?.designation_type || "Police",
+        customProps: createFieldProps({
+          onChange: (e: React.ChangeEvent<HTMLSelectElement>) => {
+            const type = e.target.value;
+            if (isEditMode) {
+              setEditFormData(prev => ({ 
+                ...prev, 
+                designation_type: type, 
+                designation_id: '',
+              }));
+            } else {
+              setSelectedIds(prev => ({ ...prev, designationType: type }));
+            }
+          }
+        })
+      },
+
+      // Designation ID
+      {
+        name: 'designation_id', 
+        label: 'Designation*', 
+        type: 'select' as const, 
+        required: true,
+        options: (isEditMode ? filteredData.designations : dropdownData.designations).map(item => ({ 
+          value: item.id.toString(),
+          label: item.name || item.police_name || ""
+        })),
+        placeholder: isLoading.designations ? "Loading..." : 
+          (isEditMode && filteredData.designations.length === 0) 
+            ? "Designation loaded" 
+            : "Select Designation",
+        defaultValue: currentFormData?.designation_id || "",
+        customProps: createFieldProps({
+          ...(isClient && isEditMode && filteredData.designations.length === 0 && {
+            onMouseDown: () => fetchDropdownData('/designations', 'designations'),
+            onFocus: () => fetchDropdownData('/designations', 'designations')
+          }),
+          ...(!isEditMode && isClient && {
+            onMouseDown: () => handleDropdownClick('designations', () => fetchDropdownData('/designations', 'designations')),
+            onFocus: () => handleDropdownClick('designations', () => fetchDropdownData('/designations', 'designations'))
+          })
+        })
+      },
+
+      // Department ID (hardcoded as per your payload)
+      { 
+        name: 'department_id', 
+        label: 'Department ID*', 
+        type: 'text', 
+        placeholder: 'Enter Department ID', 
+        required: true, 
+        defaultValue: '2',
+        customProps: createFieldProps() 
+      },  
+      
+      { 
+        name: 'gender', 
+        label: 'Gender*', 
+        type: 'select' as const, 
+        required: true, 
+        defaultValue: currentFormData?.gender || "Male",
+        options: [
+          { value: 'Male', label: 'Male' }, 
+          { value: 'Female', label: 'Female' }, 
+          { value: 'Others', label: 'Others' }
+        ],
+        customProps: createFieldProps()
+      },
+      
+      // Country field
+      {
+        name: 'country_id',
+        label: 'Country name :',
+        type: 'select',
+        required: true,
+        options: countries.map(country => ({ 
+          value: country.id.toString(), 
+          label: country.country_name || country.name || ""
+        })),
+        placeholder: isCountriesLoading ? "Loading countries..." : 
+                    (countries.length === 0 ? "Click to load countries" : "Select Country"),
+        defaultValue: isEditMode ? currentFormData?.country_id : selectedIds.country,
+        customProps: {
+          ...createFieldProps(),
+          onMouseDown: handleCountryDropdownClick,
+          onFocus: handleCountryDropdownClick,
+          onChange: async (e: React.ChangeEvent<HTMLSelectElement>) => { 
+            const countryId = e.target.value;
+            
+            // Reset dependent fields
+            const resetData = {
+              state_id: '',
+              district_id: '',
+              city_id: '',
+              sdpo_id: '',
+              police_station_id: ''
+            };
+
+            if (isEditMode) {
+              setEditFormData(prev => ({ 
+                ...prev, 
+                country_id: countryId,
+                ...resetData
+              }));
+              setFilteredData(prev => ({
+                ...prev,
+                states: [],
+                districts: [],
+                cities: [],
+                sdpo: [],
+                policeStations: []
+              }));
+            } else {
+              setSelectedIds(prev => ({
+                ...prev,
+                country: countryId,
+                state: "",
+                district: "",
+                sdpo: ""
+              }));
+            }
+
+            // Clear lower dropdowns
+            setFilteredData(prev => ({
+              ...prev,
+              states: [],
+              districts: [],
+              cities: [],
+              sdpo: [],
+              policeStations: []
+            }));
+
+            // Fetch states by country
+            if (countryId) {
+              await fetchByParentId(`/states/country/${countryId}`, countryId, "states");
+            }
+          },
+        }
+      },    
+      
+      // State (dependent on country)
+      {
+        name: 'state_id', 
+        label: 'State*', 
+        type: 'select' as const, 
+        required: true,
+        disabled: isEditMode ? !currentFormData?.country_id : !selectedIds.country,
+        options: filteredData.states.map(item => ({
+          value: item.id.toString(), 
+          label: item.state_name || item.name || ""
+        })),
+        placeholder: isLoading.states ? "Loading..." : 
+          (isEditMode && currentFormData?.country_id && filteredData.states.length === 0) 
+            ? "Click to load states" 
+            : (selectedIds.country ? "Select State" : "Please select country first"),
+        defaultValue: currentFormData?.state_id || "",
+        customProps: createFieldProps({
+          onChange: async (e: React.ChangeEvent<HTMLSelectElement>) => {
+            const stateId = e.target.value;
+            const resetData = { district_id: '', city_id: '', sdpo_id: '', police_station_id: '' };
+            
+            if (isEditMode) {
+              setEditFormData(prev => ({ ...prev, state_id: stateId, ...resetData }));
+              setFilteredData(prev => ({ ...prev, districts: [], cities: [], sdpo: [], policeStations: [] }));
+            } else {
+              setSelectedIds(prev => ({ ...prev, state: stateId, district: "", sdpo: "" }));
+            }
+            
+            await fetchByParentId(`/districts/state/${stateId}`, stateId, 'districts');
+            setFilteredData(prev => ({ ...prev, cities: [], sdpo: [], policeStations: [] }));
+          },
+          // Add click handler for edit mode
+          ...(isEditMode && currentFormData?.country_id && {
+            onMouseDown: () => handleStateDropdownClick(currentFormData.country_id, true),
+            onFocus: () => handleStateDropdownClick(currentFormData.country_id, true)
+          })
+        })
+      },
+      
+      // District
+      {
+        name: 'district_id', 
+        label: 'District*', 
+        type: 'select' as const, 
+        required: true,
+        disabled: isEditMode ? !currentFormData?.state_id : !selectedIds.state,
+        options: filteredData.districts.map(item => ({
+          value: item.id.toString(), 
+          label: item.district_name || item.name || ""
+        })),
+        placeholder: isLoading.districts ? "Loading..." : 
+          (isEditMode && currentFormData?.state_id && filteredData.districts.length === 0) 
+            ? "Click to load districts" 
+            : (selectedIds.state ? "Select District" : "Please select state first"),
+        defaultValue: currentFormData?.district_id || "",
+        customProps: createFieldProps({
+          onChange: async (e: React.ChangeEvent<HTMLSelectElement>) => {
+            const districtId = e.target.value;
+            const resetData = { city_id: '', sdpo_id: '', police_station_id: '' };
+            
+            if (isEditMode) {
+              setEditFormData(prev => ({ ...prev, district_id: districtId, ...resetData }));
+              setFilteredData(prev => ({ ...prev, cities: [], sdpo: [], policeStations: [] }));
+            } else {
+              setSelectedIds(prev => ({ ...prev, district: districtId, sdpo: "" }));
+            }
+            
+            await Promise.all([
+              fetchByParentId(`/cities/district/${districtId}`, districtId, 'cities'),
+            ]);
+          },
+          // Add click handler for edit mode
+          ...(isEditMode && currentFormData?.state_id && {
+            onMouseDown: () => handleDistrictDropdownClick(currentFormData.state_id, true),
+            onFocus: () => handleDistrictDropdownClick(currentFormData.state_id, true)
+          })
+        })
+      },
+      
+      // City
+      {
+        name: "city_id",
+        label: "City*",
+        type: "select",
+        required: true,
+        disabled: isEditMode ? !currentFormData?.district_id : !selectedIds.district,
+        options: filteredData.cities.map(item => ({
+          value: item.id.toString(),
+          label: item.city_name || item.name || ""
+        })),
+        placeholder: isLoading.cities ? "Loading..." : 
+          (isEditMode && currentFormData?.district_id && filteredData.cities.length === 0) 
+            ? "Click to load cities" 
+            : "Select City",
+        defaultValue: currentFormData?.city_id || "",
+        customProps: {
+          ...createFieldProps(),
+          onChange: async (e: React.ChangeEvent<HTMLSelectElement>) => {
+            const cityId = e.target.value;
+
+            // Reset children dropdowns
+            if (isEditMode) {
+              setEditFormData(prev => ({
+                ...prev,
+                city_id: cityId,
+                sdpo_id: "",
+                police_station_id: ""
+              }));
+              setFilteredData(prev => ({ ...prev, sdpo: [], policeStations: [] }));
+            } else {
+              setSelectedIds(prev => ({
+                ...prev,
+                city: cityId,
+                sdpo: ""
+              }));
+            }
+
+            // Fetch SDPO by CITY
+            await fetchByParentId(`/sdpo/city/${cityId}`, cityId, "sdpo");
+
+            // Reset stations list
+            setFilteredData(prev => ({
+              ...prev,
+              policeStations: []
+            }));
+          },
+          // Add click handler for edit mode
+          ...(isEditMode && currentFormData?.district_id && {
+            onMouseDown: () => handleCityDropdownClick(currentFormData.district_id, true),
+            onFocus: () => handleCityDropdownClick(currentFormData.district_id, true)
+          })
+        }
+      },
+      
+      // SDPO
+      {
+        name: "sdpo_id",
+        label: "SDPO*",
+        type: "select",
+        required: true,
+        disabled: isEditMode ? !currentFormData?.city_id : !selectedIds.city,
+        options: filteredData.sdpo.map(item => ({
+          value: item.id.toString(),
+          label: item.name || ""
+        })),
+        placeholder: isLoading.sdpo ? "Loading..." : 
+          (isEditMode && currentFormData?.city_id && filteredData.sdpo.length === 0) 
+            ? "Click to load SDPOs" 
+            : "Select SDPO",
+        defaultValue: currentFormData?.sdpo_id || "",
+        customProps: {
+          ...createFieldProps(),
+          onChange: async (e: React.ChangeEvent<HTMLSelectElement>) => {
+            const sdpoId = e.target.value;
+
+            if (isEditMode) {
+              setEditFormData(prev => ({
+                ...prev,
+                sdpo_id: sdpoId,
+                police_station_id: ""
+              }));
+              setFilteredData(prev => ({ ...prev, policeStations: [] }));
+            } else {
+              setSelectedIds(prev => ({
+                ...prev,
+                sdpo: sdpoId
+              }));
+            }
+
+            // Fetch Police Stations by SDPO
+            await fetchByParentId(`/police-stations/by-sdpo/${sdpoId}`, sdpoId, "policeStations");
+          },
+          // Add click handler for edit mode
+          ...(isEditMode && currentFormData?.city_id && {
+            onMouseDown: () => handleSDPODropdownClick(currentFormData.city_id, true),
+            onFocus: () => handleSDPODropdownClick(currentFormData.city_id, true)
+          })
+        }
+      },
+      
+      // Police Station
+      {
+        name: 'police_station_id', 
+        label: 'Police Station*', 
+        type: 'select' as const, 
+        required: true,
+        disabled: isEditMode ? !currentFormData?.sdpo_id : !selectedIds.sdpo,
+        options: filteredData.policeStations.map(item => ({
+          value: item.id.toString(), 
+          label: item.station_name || item.name || ""
+        })),
+        placeholder: isLoading.policeStations ? "Loading..." : 
+          (isEditMode && currentFormData?.sdpo_id && filteredData.policeStations.length === 0) 
+            ? "Click to load police stations" 
+            : (selectedIds.sdpo ? "Select Police Station" : "Please select SDPO first"),
+        defaultValue: currentFormData?.police_station_id || "",
+        customProps: {
+          ...createFieldProps(),
+          // Add click handler for edit mode
+          ...(isEditMode && currentFormData?.sdpo_id && {
+            onMouseDown: () => handlePoliceStationDropdownClick(currentFormData.sdpo_id, true),
+            onFocus: () => handlePoliceStationDropdownClick(currentFormData.sdpo_id, true)
+          })
+        }
+      },
+            
+      // Other fields
+      { 
+        name: 'pincode', 
+        label: 'Pincode*', 
+        type: 'text', 
+        placeholder: 'Enter pincode', 
+        required: true, 
+        defaultValue: currentFormData?.pincode || "", 
+        customProps: createFieldProps() 
+      },
+      
+      { 
+        name: 'aadhar_number', 
+        label: 'Aadhar Number*', 
+        type: 'text', 
+        placeholder: 'Enter Aadhar Number', 
+        required: true, 
+        defaultValue: currentFormData?.aadhar_number || "", 
+        customProps: createFieldProps() 
+      },
+      
+      { 
+        name: 'pan_number', 
+        label: 'Pan Number*', 
+        type: 'text', 
+        placeholder: 'Enter Pan Number', 
+        required: true, 
+        defaultValue: currentFormData?.pan_number || "", 
+        customProps: createFieldProps() 
+      },
+      
+      { 
+        name: 'buckal_number', 
+        label: 'Buckal Number*', 
+        type: 'text', 
+        placeholder: 'Enter Buckal Number', 
+        required: true, 
+        defaultValue: currentFormData?.buckal_number || "", 
+        customProps: createFieldProps() 
+      },
+      
+      { 
+        name: 'address', 
+        label: 'Address*', 
+        type: 'textarea', 
+        placeholder: 'Enter address', 
+        required: true, 
+        defaultValue: currentFormData?.address || "", 
+        customProps: createFieldProps({ rows: 3 }) 
+      },
+      
+      // Image upload
+      {
+        name: 'image_upload', 
+        label: 'Profile Image', 
+        type: 'custom' as const,
+        customElement: renderImageUploadField(mode),
+      },
+    ];
+
+    // Add status field for edit mode
+    if (isEditMode) {
+      baseFields.push({
+        name: 'status', 
+        label: 'Status*', 
+        type: 'select' as const, 
+        required: true,
+        options: [
+          { value: 'Active', label: 'Active' }, 
+          { value: 'Inactive', label: 'Inactive' }
+        ],
+        defaultValue: currentFormData?.status || "Active",
+        customProps: createFieldProps()
+      });
+    }
+
+    return baseFields;
+  }, [
+    countries, isCountriesLoading, dropdownData, filteredData, isLoading, selectedIds, 
+    editFormData, editingPoliceUser, imagePreview, isClient, handleCountryDropdownClick,
+    fetchByParentId, fetchDropdownData, handleDropdownClick,
+    handleStateDropdownClick, handleDistrictDropdownClick, handleCityDropdownClick,
+    handleSDPODropdownClick, handlePoliceStationDropdownClick, showToast
+  ]);
+
+  // Memoized field configurations
+  const addPoliceUserFields = useMemo(() => getPoliceUserFields('add'), [getPoliceUserFields]);
+  const editPoliceUserFields = useMemo(() => getPoliceUserFields('edit'), [getPoliceUserFields]);
+
+  // CRUD Operations
+  const handleAddPoliceUser = useCallback(async (formData: Record<string, string>) => {
+    try {
+      console.log("Form Data Received:", formData);
+      
+      const formDataToSend = new FormData();
+      
+      // Create payload matching your API expectations
       const payload = {
-        name: formData.name,
+        police_name: formData.police_name,
         email: formData.email,
         mobile: formData.mobile,
         password: formData.password,
         designation_type: formData.designation_type,
-        designation_name: formData.designation_name,
+        designation_id: formData.designation_id,
         gender: formData.gender,
-        country_id: parseInt(formData.country_id),
-        state_id: parseInt(formData.state_id),
-        district_id: parseInt(formData.district_id),
-        city_id: parseInt(formData.city_id),
+        country_id: parseInt(formData.country_id) || 1,
+        state_id: parseInt(formData.state_id) || 1,
+        district_id: parseInt(formData.district_id) || 2,
+        city_id: parseInt(formData.city_id) || 3,
+        sdpo_id: parseInt(formData.sdpo_id) || 5,
+        police_station_id: parseInt(formData.police_station_id) || 2,
         pincode: formData.pincode,
         aadhar_number: formData.aadhar_number,
         pan_number: formData.pan_number,
         buckal_number: formData.buckal_number,
         address: formData.address,
-        status: "Active"
+        department_id: parseInt(formData.department_id) || 2,
+        otp: "1234",
+        latitude: "17.6800",
+        longitude: "73.9850"
       };
 
-      await api.post("/police-users", payload);
-      fetchPoliceUsers();
-      showToast("Police User added successfully!", "success");
-    } catch (error) {
+      // Append all fields to FormData
+      Object.entries(payload).forEach(([key, value]) => {
+        formDataToSend.append(key, value.toString());
+      });
+
+      // Append compressed image file if exists
+      if (imageFile) {
+        formDataToSend.append('image', imageFile);
+      }
+
+      // Log the payload for debugging
+      console.log('Sending payload:', Object.fromEntries(formDataToSend));
+
+      // Send the request
+      const response = await api.post("/mst-police", formDataToSend, { 
+        headers: { 
+          'Content-Type': 'multipart/form-data' 
+        } 
+      });
+      
+      console.log("API Response:", response);
+      
+      if (response.success) {
+        // Refresh data
+        fetchPoliceUsers(pagination.pageIndex, pagination.pageSize, searchQuery);
+        
+        // Reset form
+        setImageFile(null);
+        setImagePreview("");
+        setSelectedIds({ country: "", state: "", district: "", sdpo: "", designationType: "" });
+        setFilteredData({
+          states: [],
+          districts: [],
+          cities: [],
+          designations: [],
+          sdpo: [],
+          policeStations: [],
+        });
+        showToast("Police User added successfully!", "success");
+      } else {
+        throw new Error(response.message || "Failed to add police user");
+      }
+      
+    } catch (error: any) {
       console.error("Error adding police user:", error);
-      showToast("Error adding police user. Please try again.", "error");
+      showToast(error.message || "Error adding police user. Please try again.", "error");
     }
-  }, [fetchPoliceUsers, showToast]);
+  }, [fetchPoliceUsers, pagination.pageIndex, pagination.pageSize, searchQuery, showToast, imageFile]);
 
   const handleEdit = useCallback(async (user: PoliceUserRow) => {
-    setEditingPoliceUser(user);
-    setEditFormData({
-      name: user.name,
-      email: user.email,
-      mobile: user.mobile,
-      password: "", // Password is not shown for security
-      designation_type: user.designation_type,
-      designation_name: user.designation_name,
-      gender: user.gender,
-      country_id: "",
-      state_id: "",
-      district_id: "",
-      city_id: "",
-      pincode: user.pincode,
-      aadhar_number: user.aadhar_number,
-      pan_number: user.pan_number,
-      buckal_number: user.buckal_number,
-      address: user.address,
-      status: user.status || "Active"
-    });
+    try {
+      setEditingPoliceUser(user);
+      
+      // Hit the API to get full user data
+      const response = await api.get(`/mst-police/${user.id}`);
+      const fullData = response?.data?.data || response?.data || response;
+      
+      console.log("Edit API Response:", fullData);
+      
+      if (!fullData) {
+        showToast("Failed to load Police User details.", "error");
+        return;
+      }
 
-    // Load countries, states and designations if not already loaded
-    if (!countriesLoaded) await fetchCountries();
-    if (!statesLoaded) await fetchAllStates();
-    if (!designationsLoaded) await fetchDesignations();
+      // Map form data
+      const formData = {
+        police_name: fullData.police_name || fullData.name || "",
+        email: fullData.email || "",
+        mobile: fullData.mobile?.toString() || "",
+        password: "",
+        designation_type: fullData.designation_type || "",
+        designation_id: fullData.designation_id?.toString() || "",
+        gender: fullData.gender || "Male",
+        country_id: fullData.country_id?.toString() || "",
+        state_id: fullData.state_id?.toString() || "",
+        district_id: fullData.district_id?.toString() || "",
+        city_id: fullData.city_id?.toString() || "",
+        pincode: fullData.pincode?.toString() || "",
+        aadhar_number: fullData.aadhar_number || "",
+        pan_number: fullData.pan_number || "",
+        buckal_number: fullData.buckal_number?.toString() || "",
+        address: fullData.address || "",
+        status: fullData.status || "Active",
+        sdpo_id: fullData.sdpo_id?.toString() || "",
+        police_station_id: fullData.police_station_id?.toString() || fullData.station_id?.toString() || "",
+        department_id: fullData.department_id?.toString() || "2",
+        image: fullData.image || fullData.image_url || ""
+      };
 
-    setIsEditModalOpen(true);
-  }, [countriesLoaded, statesLoaded, designationsLoaded, fetchCountries, fetchAllStates, fetchDesignations]);
+      console.log("Form Data after mapping:", formData);
+      
+      setEditFormData(formData);
+      
+      // Set selected IDs for cascading dropdowns
+      setSelectedIds({
+        country: fullData.country_id?.toString() || "",
+        state: fullData.state_id?.toString() || "",
+        district: fullData.district_id?.toString() || "",
+        sdpo: fullData.sdpo_id?.toString() || "",
+        designationType: fullData.designation_type || "",
+      });
 
-  const handleUpdate = useCallback(async () => {
+      // Pre-fetch and pre-populate dropdown data
+      await preFetchEditDropdownData(formData);
+
+      setIsEditModalOpen(true);
+    } catch (error) {
+      console.error("Error loading Police User details:", error);
+      showToast("Failed to load Police User details. Please try again.", "error");
+    }
+  }, [showToast, preFetchEditDropdownData]);
+
+  const handleUpdate = useCallback(async (formData: Record<string, string>) => {
     if (!editingPoliceUser) return;
 
     try {
       setSaveLoading(true);
-      const payload = {
-        name: editFormData.name,
-        email: editFormData.email,
-        mobile: editFormData.mobile,
-        designation_type: editFormData.designation_type,
-        designation_name: editFormData.designation_name,
-        gender: editFormData.gender,
-        pincode: editFormData.pincode,
-        aadhar_number: editFormData.aadhar_number,
-        pan_number: editFormData.pan_number,
-        buckal_number: editFormData.buckal_number,
-        address: editFormData.address,
-        status: editFormData.status
-      };
-
-      // Only include password if it's provided
-      if (editFormData.password) {
-        Object.assign(payload, { password: editFormData.password });
+      const formDataToSend = new FormData();
+      
+      // Validate police_station_id before parsing
+      const policeStationId = formData.police_station_id;
+      if (!policeStationId || policeStationId.trim() === "") {
+        showToast("Police Station is required", "error");
+        setSaveLoading(false);
+        return;
       }
 
-      await api.put(`/police-users/${editingPoliceUser.id}`, payload);
-      fetchPoliceUsers();
+      // Create payload matching API expectations - using correct field names
+      const payload = {
+        police_name: formData.police_name,
+        email: formData.email,
+        mobile: formData.mobile,
+        designation_type: formData.designation_type,
+        designation_id: formData.designation_id,
+        gender: formData.gender,
+        country_id: parseInt(formData.country_id),
+        state_id: parseInt(formData.state_id),
+        district_id: parseInt(formData.district_id),
+        city_id: parseInt(formData.city_id),
+        sdpo_id: parseInt(formData.sdpo_id),
+        police_station_id: parseInt(policeStationId),
+        pincode: formData.pincode,
+        aadhar_number: formData.aadhar_number,
+        pan_number: formData.pan_number,
+        buckal_number: formData.buckal_number,
+        address: formData.address,
+        status: formData.status,
+        department_id: parseInt(formData.department_id) || 2
+      };
+
+      // Validate all required numeric fields
+      const numericFields = [
+        'country_id', 'state_id', 'district_id', 'city_id', 
+        'sdpo_id', 'police_station_id', 'designation_id', 'department_id'
+      ];
+      
+      for (const field of numericFields) {
+        if (isNaN(payload[field as keyof typeof payload] as number)) {
+          showToast(`Invalid value for ${field.replace('_', ' ')}`, "error");
+          setSaveLoading(false);
+          return;
+        }
+      }
+
+      // Append all fields to FormData
+      Object.entries(payload).forEach(([key, value]) => {
+        formDataToSend.append(key, value.toString());
+      });
+
+      // Append password only if provided
+      if (formData.password) {
+        formDataToSend.append('password', formData.password);
+      }
+
+      // Append image if it's a File (compressed)
+      if (editFormData.image instanceof File) {
+        formDataToSend.append('image', editFormData.image);
+      }
+
+      console.log("Update payload:", Object.fromEntries(formDataToSend));
+      
+      const response = await api.put(`/mst-police/${editingPoliceUser.id}`, formDataToSend, { 
+        headers: { 'Content-Type': 'multipart/form-data' } 
+      });
+      
+      console.log("Update response:", response);
+      
+      fetchPoliceUsers(pagination.pageIndex, pagination.pageSize, searchQuery);
       setIsEditModalOpen(false);
       setEditingPoliceUser(null);
+      setEditFormData({ police_name: "", email: "", mobile: "", password: "", designation_type: "", designation_id: "",
+        gender: "Male", country_id: "", state_id: "", district_id: "", city_id: "", sdpo_id: "",
+        police_station_id: "", pincode: "", aadhar_number: "", pan_number: "", buckal_number: "",
+        address: "", status: "Active", image: "", department_id: "2" });
       showToast("Police User updated successfully!", "success");
     } catch (error) {
       console.error("Error updating police user:", error);
@@ -861,155 +1437,234 @@ export default function PoliceUserPage() {
     } finally {
       setSaveLoading(false);
     }
-  }, [editingPoliceUser, editFormData, fetchPoliceUsers, showToast]);
+  }, [editingPoliceUser, fetchPoliceUsers, pagination.pageIndex, pagination.pageSize, searchQuery, showToast, editFormData]);
 
-  // -----------------------------------
-  // ❌ DELETE Handler (Called from AlertPopover)
-  // -----------------------------------
   const handleDeleteConfirm = useCallback(async (id: number) => {
     try {
-      await api.delete(`/police-users/${id}`);
-      await fetchPoliceUsers();
+      await api.delete(`/mst-police/${id}`);
+      await fetchPoliceUsers(pagination.pageIndex, pagination.pageSize, searchQuery);
       showToast("Police User deleted successfully!", "success");
     } catch (error) {
       console.error("Error deleting police user:", error);
       showToast("Error deleting police user. Please try again.", "error");
       throw error;
     }
-  }, [fetchPoliceUsers, showToast]);
+  }, [fetchPoliceUsers, pagination.pageIndex, pagination.pageSize, searchQuery, showToast]);
 
   const closeEditModal = useCallback(() => {
     setIsEditModalOpen(false);
     setEditingPoliceUser(null);
+    setSelectedIds({ country: "", state: "", district: "", sdpo: "", designationType: "" });
+    setEditFormData({ police_name: "", email: "", mobile: "", password: "", designation_type: "", designation_id: "",
+      gender: "Male", country_id: "", state_id: "", district_id: "", city_id: "", sdpo_id: "",
+      police_station_id: "", pincode: "", aadhar_number: "", pan_number: "", buckal_number: "",
+      address: "", status: "Active", image: "", department_id: "2" });
+    setFilteredData({
+      states: [],
+      districts: [],
+      cities: [],
+      designations: [],
+      sdpo: [],
+      policeStations: [],
+    });
   }, []);
 
-  // ============================================
-  // EDIT FORM HANDLERS
-  // ============================================
-  const handleEditFormChange = useCallback((field: keyof EditFormData, value: string) => {
-    setEditFormData(prev => ({ ...prev, [field]: value }));
-  }, []);
+  // Table columns
+  const columns: ColumnDef<PoliceUserRow>[] = useMemo(() => [
+    { 
+      accessorKey: "police_name", 
+      header: "Name", 
+      cell: ({ row }) => <span className="font-medium text-black">{row.original.police_name}</span>, 
+      enableSorting: true 
+    },
+    { 
+      accessorKey: "email", 
+      header: "Email", 
+      cell: ({ row }) => <span className="text-black">{row.original.email}</span>, 
+      enableSorting: true 
+    },
+    { 
+      accessorKey: "mobile", 
+      header: "Mobile", 
+      cell: ({ row }) => <span className="text-black">{row.original.mobile}</span>, 
+      enableSorting: true 
+    },
+    { 
+      accessorKey: "designation_type", 
+      header: "Designation Type", 
+      cell: ({ row }) => <span className="text-black">{row.original.designation_type}</span>, 
+      enableSorting: true 
+    },
+    { 
+      accessorKey: "designation_name", 
+      header: "Designation Name", 
+      cell: ({ row }) => <span className="text-black">{row.original.designation_name}</span>, 
+      enableSorting: true 
+    },
+    { 
+      accessorKey: "state_name", 
+      header: "State", 
+      cell: ({ row }) => <span className="text-black">{row.original.state_name || "N/A"}</span>, 
+      enableSorting: true 
+    },
+    { 
+      accessorKey: "district_name", 
+      header: "District", 
+      cell: ({ row }) => <span className="text-black">{row.original.district_name || "N/A"}</span>, 
+      enableSorting: true 
+    },
+    { 
+      accessorKey: "sdpo_name", 
+      header: "SDPO Name", 
+      cell: ({ row }) => <span className="text-black">{row.original.sdpo_name || "N/A"}</span>, 
+      enableSorting: true 
+    },
+    { 
+      accessorKey: "station_name", 
+      header: "Station Name", 
+      cell: ({ row }) => <span className="text-black">{row.original.station_name || "N/A"}</span>, 
+      enableSorting: true 
+    },
+    { 
+      accessorKey: "status", 
+      header: "Status", 
+      cell: ({ row }) => (
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${row.original.status === "Active" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+          {row.original.status || "Active"}
+        </span>
+      ), 
+      enableSorting: true 
+    },
+    { 
+      id: "actions", 
+      header: "Actions", 
+      cell: ({ row }) => (
+        <div className="flex gap-2 justify-center">
+          <button 
+            onClick={() => handleEdit(row.original)} 
+            className="px-3 py-1 rounded-md text-sm bg-blue-100 text-black hover:bg-blue-200"
+          >
+            Edit
+          </button>
+          <AlertPopover
+            trigger={
+              <button className="px-3 py-1 rounded-md text-sm bg-red-100 text-red-700 hover:bg-red-200">
+                Delete
+              </button>
+            }
+            title="Are you sure you want to delete this Police User?"
+            okText="OK" 
+            cancelText="Cancel" 
+            okButtonColor="#9A65C2" 
+            cancelButtonColor="#6B7280"
+            successMessage="Record deleted successfully" 
+            errorMessage="Failed to delete record. Please try again."
+            onConfirm={() => handleDeleteConfirm(row.original.id)}
+          />
+        </div>
+      ), 
+      enableSorting: false 
+    },
+  ], [handleEdit, handleDeleteConfirm]);
 
-  const handleCountrySelectChange = useCallback(async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const countryId = e.target.value;
-    handleEditFormChange('country_id', countryId);
-    handleEditFormChange('state_id', '');
-    handleEditFormChange('district_id', '');
-    handleEditFormChange('city_id', '');
-    setFilteredStates([]);
-    setFilteredDistricts([]);
-    setFilteredCities([]);
-    if (countryId) await fetchStatesByCountry(countryId);
-  }, [handleEditFormChange, fetchStatesByCountry]);
-
-  const handleStateSelectChange = useCallback(async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const stateId = e.target.value;
-    handleEditFormChange('state_id', stateId);
-    handleEditFormChange('district_id', '');
-    handleEditFormChange('city_id', '');
-    setFilteredDistricts([]);
-    setFilteredCities([]);
-    if (stateId) await fetchDistrictsByState(stateId);
-  }, [handleEditFormChange, fetchDistrictsByState]);
-
-  const handleDistrictSelectChange = useCallback(async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const districtId = e.target.value;
-    handleEditFormChange('district_id', districtId);
-    handleEditFormChange('city_id', '');
-    setFilteredCities([]);
-    if (districtId) await fetchCitiesByDistrict(districtId);
-  }, [handleEditFormChange, fetchCitiesByDistrict]);
-
-  const handleDesignationTypeSelectChange = useCallback(async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const type = e.target.value;
-    handleEditFormChange('designation_type', type);
-    handleEditFormChange('designation_name', '');
-    if (type) {
-      await fetchDesignationsByType(type);
-    } else {
-      setFilteredDesignations([]);
-    }
-  }, [handleEditFormChange, fetchDesignationsByType]);
-
-  // ============================================
-  // EDIT MODAL DROPDOWN HANDLERS
-  // ============================================
-  const handleEditCountryDropdownClick = useCallback(async () => {
-    if (!isCountriesLoading && !countriesLoaded) {
-      await fetchCountries();
-    }
-  }, [isCountriesLoading, countriesLoaded, fetchCountries]);
-
-  const handleEditStateDropdownClick = useCallback(async () => {
-    if (!isStatesLoading && !statesLoaded) {
-      await fetchAllStates();
-    }
-  }, [isStatesLoading, statesLoaded, fetchAllStates]);
-
-  const handleEditDistrictDropdownClick = useCallback(async () => {
-    if (!editFormData.state_id || isDistrictsLoading) return;
-    await fetchDistrictsByState(editFormData.state_id);
-  }, [editFormData.state_id, isDistrictsLoading, fetchDistrictsByState]);
-
-  const handleEditCityDropdownClick = useCallback(async () => {
-    if (!editFormData.district_id || isCitiesLoading) return;
-    await fetchCitiesByDistrict(editFormData.district_id);
-  }, [editFormData.district_id, isCitiesLoading, fetchCitiesByDistrict]);
-
-  const handleEditDesignationDropdownClick = useCallback(async () => {
-    if (!isDesignationsLoading && !designationsLoaded) {
-      await fetchDesignations();
-    }
-  }, [isDesignationsLoading, designationsLoaded, fetchDesignations]);
-
-  // ============================================
-  // TABLE CONFIGURATION
-  // ============================================
-  const paginatedData = useMemo(() => {
-    const start = pagination.pageIndex * pagination.pageSize;
-    const end = start + pagination.pageSize;
-    return filteredPoliceUsers.slice(start, end);
-  }, [filteredPoliceUsers, pagination.pageIndex, pagination.pageSize]);
-
+  // Table configuration
   const { tableElement, table } = CustomTable<PoliceUserRow>({
-    data: paginatedData,
-    columns,
-    pagination,
-    totalCount,
+    data: policeUsers, 
+    columns, 
+    pagination, 
+    totalCount, 
     loading,
-    onPaginationChange: setPagination,
-    onSortingChange: setSorting,
+    onPaginationChange: setPagination, 
+    onSortingChange: setSorting, 
     sorting,
-    emptyMessage: "No Police Users available",
-    pageSizeOptions: [10, 20, 30, 50],
-    enableSorting: true,
-    manualSorting: false,
-    manualPagination: false,
-    showSerialNumber: true,
-    serialNumberHeader: "S.NO.",
+    emptyMessage: "No Police Users available", 
+    pageSizeOptions: [5,10, 20, 30, 50],
+    enableSorting: true, 
+    manualSorting: false, 
+    manualPagination: true,
+    showSerialNumber: true, 
+    serialNumberHeader: "S.NO.", 
     maxHeight: "500px",
-    headerBgColor: "#E7EDFD",
-    headerTextColor: "#000000",
+    headerBgColor: "#E7EDFD", 
+    headerTextColor: "#000000", 
     getRowId: (row) => row.id,
+    columnVisibility, 
+    onColumnVisibilityChange: setColumnVisibility,
   });
 
-  // ============================================
-  // RENDER
-  // ============================================
+  // Export handlers
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+    setPagination(prev => ({ ...prev, pageIndex: 0 }));
+    return [];
+  }, []);
+
+  const handleExportPdf = useCallback(() => {
+    const pdfConfig: ExportPdfOptions = {
+      filename: `police-user-master-report-${new Date().toLocaleDateString("en-GB").replace(/\//g, "-")}.pdf`,
+      title: "Police User Master Report", 
+      orientation: "landscape", 
+      pageSize: "a4",
+      columns: [
+        { header: "Name", accessorKey: "police_name" }, 
+        { header: "Email", accessorKey: "email" },
+        { header: "Mobile", accessorKey: "mobile" }, 
+        { header: "Designation Type", accessorKey: "designation_type" },
+        { header: "Designation Name", accessorKey: "designation_name" }, 
+        { header: "State", accessorKey: "state_name" },
+        { header: "District", accessorKey: "district_name" }, 
+        { header: "SDPO Name", accessorKey: "sdpo_name" },
+        { header: "Station Name", accessorKey: "station_name" },
+        { 
+          header: "Status", 
+          accessorKey: "status", 
+          formatter: (value) => value === "Active" ? "Active" : "Inactive" 
+        },
+      ],
+      data: policeUsers, 
+      showSerialNumber: true, 
+      serialNumberHeader: "S.NO.",
+      projectName: "E-Police", 
+      exportDate: true, 
+      showTotalCount: true,
+      searchQuery: searchQuery || "All Police Users", 
+      userRole: "admin",
+    };
+    
+    const result = exportToPdf(pdfConfig);
+    showToast(result.success ? "PDF exported successfully!" : "Failed to export PDF", result.success ? "success" : "error");
+  }, [exportToPdf, policeUsers, searchQuery, showToast]);
+
+  const handleExportExcel = useCallback(async () => {
+  try {
+    const response = await api.getBlob("/mst-police/export/excel");
+
+    const blob = new Blob([response.data], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `police-users-${Date.now()}.xlsx`;
+    link.click();
+
+    showToast("Police User Excel downloaded successfully!", "success");
+  } catch (error) {
+    console.error("❌ Excel Download Error:", error);
+    showToast("Failed to download police user excel", "error");
+  }
+}, [showToast]);
+
+  const handlePrint = useCallback(() => window.print(), []);
+
   return (
     <div className="w-full min-h-screen bg-white px-4 md:px-8">
-      {/* Toast Notification - Top Center */}
-      <Toast 
-        message={toast.message} 
-        type={toast.type} 
-        isVisible={toast.isVisible} 
-      />
-
-      {error && <div className="text-red-600 mb-4">{error}</div>}
-
+      <Toast message={toast.message} type={toast.type} isVisible={toast.isVisible} />
+      
       <AddSection 
         title="Add Police User"
-        fields={policeUserFields}
+        fields={addPoliceUserFields}
         onSubmit={handleAddPoliceUser}
         submitButtonText="Add Police User"
       />
@@ -1017,354 +1672,31 @@ export default function PoliceUserPage() {
       <div className="mt-6">
         <div className="flex justify-between items-center mb-4 gap-4">
           <div className="flex items-center gap-3 flex-shrink-0">
-            <ExportButtons
-              onExportPdf={handleExportPdf}
-              onExportExcel={handleExportExcel}
-              onPrint={handlePrint}
-            />
-            <ColumnVisibilitySelector
-              columns={table.getAllColumns()}
-              backgroundColor="#EACEFF"
-              textColor="#000000"
-            />
+            <ExportButtons pdfConfig={{}} onExportPdf={handleExportPdf} onExportExcel={handleExportExcel} onPrint={handlePrint} />
+            <div className="relative" style={{ minHeight: "40px", minWidth: "180px" }}>
+              {isClient && <ColumnVisibilitySelector columns={table.getAllColumns()} backgroundColor="#EACEFF" textColor="#000000" />}
+            </div>
           </div>
-
           <div className="w-full max-w-xs">
-            <SearchComponent
-              placeholder="Search Police Users..."
-              debounceDelay={400}
-              serverSideSearch={true}
-              onSearch={async (query: string) => {
-                
-                const response = await api.get("/police-users", {
-                  search: query,
-                  page: pagination.pageIndex + 1,
-                  limit: pagination.pageSize,
-                });
-
-                const results = extractPoliceUserData(response);
-
-                // update UI
-                setFilteredPoliceUsers(results);
-                setTotalCount(results.length);
-
-                return results; // SearchComponent requires this
-              }}
+            <SearchComponent 
+              placeholder="Search Police Users..." 
+              debounceDelay={400} 
+              onSearch={handleSearch} 
+              serverSideSearch={true} 
             />
           </div>
         </div>
-
         {tableElement}
       </div>
 
-      {/* EDIT MODAL */}
-      {isEditModalOpen && editingPoliceUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg w-full max-w-6xl shadow-xl border border-gray-200 max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-gray-800">Edit Police User - ID: {editingPoliceUser.id}</h2>
-                <button onClick={closeEditModal} className="text-gray-500 hover:text-gray-700 text-2xl transition-colors duration-200">×</button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* BASIC INFORMATION */}
-                <div className="md:col-span-2">
-                  <h3 className="text-lg font-semibold text-gray-700 mb-4 border-b pb-2">Basic Information</h3>
-                </div>
-
-                {/* NAME */}
-                <div>
-                  <label className="font-medium block mb-2 text-gray-700">Name* :</label>
-                  <input
-                    type="text"
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    value={editFormData.name}
-                    onChange={(e) => handleEditFormChange('name', e.target.value)}
-                    placeholder="Enter Name"
-                  />
-                </div>
-
-                {/* EMAIL */}
-                <div>
-                  <label className="font-medium block mb-2 text-gray-700">Email* :</label>
-                  <input
-                    type="email"
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    value={editFormData.email}
-                    onChange={(e) => handleEditFormChange('email', e.target.value)}
-                    placeholder="Enter email"
-                  />
-                </div>
-
-                {/* MOBILE */}
-                <div>
-                  <label className="font-medium block mb-2 text-gray-700">Mobile* :</label>
-                  <input
-                    type="text"
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    value={editFormData.mobile}
-                    onChange={(e) => handleEditFormChange('mobile', e.target.value)}
-                    placeholder="Enter mobile no"
-                  />
-                </div>
-
-                {/* PASSWORD */}
-                <div>
-                  <label className="font-medium block mb-2 text-gray-700">Password :</label>
-                  <input
-                    type="password"
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    value={editFormData.password}
-                    onChange={(e) => handleEditFormChange('password', e.target.value)}
-                    placeholder="Enter new password (leave blank to keep current)"
-                  />
-                </div>
-
-                {/* DESIGNATION INFORMATION */}
-                <div className="md:col-span-2 mt-4">
-                  <h3 className="text-lg font-semibold text-gray-700 mb-4 border-b pb-2">Designation Information</h3>
-                </div>
-
-                {/* DESIGNATION TYPE */}
-                <div>
-                  <label className="font-medium block mb-2 text-gray-700">Designation Type :</label>
-                  <select
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    value={editFormData.designation_type}
-                    onChange={handleDesignationTypeSelectChange}
-                  >
-                    <option value="" className="text-gray-500">Select Designation Type</option>
-                    <option value="Head Person" className="text-gray-900">Head Person</option>
-                    <option value="Station Head" className="text-gray-900">Station Head</option>
-                    <option value="Police" className="text-gray-900">Police</option>
-                  </select>
-                </div>
-
-                {/* DESIGNATION NAME */}
-                <div>
-                  <label className="font-medium block mb-2 text-gray-700">Designation Name* :</label>
-                  <select
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:opacity-50"
-                    value={editFormData.designation_name}
-                    onChange={(e) => handleEditFormChange('designation_name', e.target.value)}
-                    onMouseDown={handleEditDesignationDropdownClick}
-                    onFocus={handleEditDesignationDropdownClick}
-                    disabled={!editFormData.designation_type}
-                  >
-                    <option value="" className="text-gray-500">
-                      {isDesignationsLoading ? "Loading designations..." : 
-                       !editFormData.designation_type ? "Please select designation type first" : "Select Designation"}
-                    </option>
-                    {filteredDesignations.map((designation) => (
-                      <option key={designation.id} value={designation.name} className="text-gray-900">
-                        {designation.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* GENDER */}
-                <div>
-                  <label className="font-medium block mb-2 text-gray-700">Gender :</label>
-                  <select
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    value={editFormData.gender}
-                    onChange={(e) => handleEditFormChange('gender', e.target.value)}
-                  >
-                    <option value="Male" className="text-gray-900">Male</option>
-                    <option value="Female" className="text-gray-900">Female</option>
-                    <option value="Others" className="text-gray-900">Others</option>
-                  </select>
-                </div>
-
-                {/* STATUS */}
-                <div>
-                  <label className="font-medium block mb-2 text-gray-700">Status :</label>
-                  <select
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    value={editFormData.status}
-                    onChange={(e) => handleEditFormChange('status', e.target.value)}
-                  >
-                    <option value="Active" className="text-gray-900">Active</option>
-                    <option value="Inactive" className="text-gray-900">Inactive</option>
-                  </select>
-                </div>
-
-                {/* LOCATION INFORMATION */}
-                <div className="md:col-span-2 mt-4">
-                  <h3 className="text-lg font-semibold text-gray-700 mb-4 border-b pb-2">Location Information</h3>
-                </div>
-
-                {/* COUNTRY */}
-                <div>
-                  <label className="font-medium block mb-2 text-gray-700">Country* :</label>
-                  <select
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    value={editFormData.country_id}
-                    onChange={handleCountrySelectChange}
-                    onMouseDown={handleEditCountryDropdownClick}
-                    onFocus={handleEditCountryDropdownClick}
-                  >
-                    <option value="" className="text-gray-500">Select Country</option>
-                    {countries.map((country) => (
-                      <option key={country.id} value={country.id} className="text-gray-900">
-                        {country.country_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* STATE */}
-                <div>
-                  <label className="font-medium block mb-2 text-gray-700">State* :</label>
-                  <select
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    value={editFormData.state_id}
-                    onChange={handleStateSelectChange}
-                    onMouseDown={handleEditStateDropdownClick}
-                    onFocus={handleEditStateDropdownClick}
-                  >
-                    <option value="" className="text-gray-500">
-                      {isStatesLoading ? "Loading states..." : "Select State"}
-                    </option>
-                    {states.map((state) => (
-                      <option key={state.id} value={state.id} className="text-gray-900">
-                        {state.state_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* DISTRICT */}
-                <div>
-                  <label className="font-medium block mb-2 text-gray-700">District* :</label>
-                  <select
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:opacity-50"
-                    value={editFormData.district_id}
-                    onChange={handleDistrictSelectChange}
-                    onMouseDown={handleEditDistrictDropdownClick}
-                    onFocus={handleEditDistrictDropdownClick}
-                    disabled={!editFormData.state_id}
-                  >
-                    <option value="" className="text-gray-500">
-                      {isDistrictsLoading ? "Loading districts..." : 
-                       !editFormData.state_id ? "Please select state first" : "Select District"}
-                    </option>
-                    {filteredDistricts.map((district) => (
-                      <option key={district.id} value={district.id} className="text-gray-900">
-                        {district.district_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* CITY */}
-                <div>
-                  <label className="font-medium block mb-2 text-gray-700">City* :</label>
-                  <select
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:opacity-50"
-                    value={editFormData.city_id}
-                    onChange={(e) => handleEditFormChange('city_id', e.target.value)}
-                    onMouseDown={handleEditCityDropdownClick}
-                    onFocus={handleEditCityDropdownClick}
-                    disabled={!editFormData.district_id}
-                  >
-                    <option value="" className="text-gray-500">
-                      {isCitiesLoading ? "Loading cities..." : 
-                       !editFormData.district_id ? "Please select district first" : "Select City"}
-                    </option>
-                    {filteredCities.map((city) => (
-                      <option key={city.id} value={city.id} className="text-gray-900">
-                        {city.city_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* PINCODE */}
-                <div>
-                  <label className="font-medium block mb-2 text-gray-700">Pincode* :</label>
-                  <input
-                    type="text"
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    value={editFormData.pincode}
-                    onChange={(e) => handleEditFormChange('pincode', e.target.value)}
-                    placeholder="Enter pincode"
-                  />
-                </div>
-
-                {/* DOCUMENT INFORMATION */}
-                <div className="md:col-span-2 mt-4">
-                  <h3 className="text-lg font-semibold text-gray-700 mb-4 border-b pb-2">Document Information</h3>
-                </div>
-
-                {/* AADHAR NUMBER */}
-                <div>
-                  <label className="font-medium block mb-2 text-gray-700">Aadhar Number* :</label>
-                  <input
-                    type="text"
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    value={editFormData.aadhar_number}
-                    onChange={(e) => handleEditFormChange('aadhar_number', e.target.value)}
-                    placeholder="Enter Aadhar Number"
-                  />
-                </div>
-
-                {/* PAN NUMBER */}
-                <div>
-                  <label className="font-medium block mb-2 text-gray-700">Pan Number* :</label>
-                  <input
-                    type="text"
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    value={editFormData.pan_number}
-                    onChange={(e) => handleEditFormChange('pan_number', e.target.value)}
-                    placeholder="Enter Pan Number"
-                  />
-                </div>
-
-                {/* BUCKAL NUMBER */}
-                <div>
-                  <label className="font-medium block mb-2 text-gray-700">Buckal Number* :</label>
-                  <input
-                    type="text"
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    value={editFormData.buckal_number}
-                    onChange={(e) => handleEditFormChange('buckal_number', e.target.value)}
-                    placeholder="Enter Buckal Number"
-                  />
-                </div>
-
-                {/* ADDRESS */}
-                <div className="md:col-span-2">
-                  <label className="font-medium block mb-2 text-gray-700">Address* :</label>
-                  <textarea
-                    className="w-full border border-gray-300 rounded px-3 py-2 text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    value={editFormData.address}
-                    onChange={(e) => handleEditFormChange('address', e.target.value)}
-                    placeholder="Enter address"
-                    rows={3}
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-4 mt-8">
-                <button onClick={closeEditModal} className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors duration-200">
-                  Cancel
-                </button>
-                <button
-                  onClick={handleUpdate}
-                  disabled={saveLoading}
-                  className="px-6 py-2 text-white rounded-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                  style={{ backgroundColor: "#9A65C2" }}
-                >
-                  {saveLoading ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <EditModal 
+        isOpen={isEditModalOpen} 
+        onClose={closeEditModal} 
+        onSubmit={handleUpdate} 
+        title={`Edit Police User - ID: ${editingPoliceUser?.id || ''}`} 
+        fields={editPoliceUserFields} 
+        isLoading={saveLoading} 
+      />
     </div>
   );
 }

@@ -3,12 +3,14 @@
 import * as React from "react";
 import { FileText, FileSpreadsheet, Printer } from "lucide-react";
 import { useExportPdf, ExportPdfOptions } from "@/hook/UseExportPdf/useExportPdf";
+import { useExportExcel, ExportExcelOptions } from "@/hook/UseExportExcel/useExportExcel";
 
 interface ExportButtonsProps {
   onExportPdf?: () => void;
   onExportExcel?: () => void;
   onPrint?: () => void;
   pdfConfig?: ExportPdfOptions; // Configuration for PDF export
+  excelConfig?: ExportExcelOptions; // Configuration for Excel export
   className?: string;
 }
 
@@ -17,12 +19,14 @@ export function ExportButtons({
   onExportExcel,
   onPrint,
   pdfConfig,
+  excelConfig,
   className = "",
 }: ExportButtonsProps) {
   const [hoveredIndex, setHoveredIndex] = React.useState<number | null>(null);
   
-  // ✅ Initialize the hook at component level
+  // ✅ Initialize both hooks at component level
   const { exportToPdf } = useExportPdf();
+  const { exportToExcel } = useExportExcel();
 
   const handlePdfExport = () => {
     if (onExportPdf) {
@@ -43,6 +47,25 @@ export function ExportButtons({
     }
   };
 
+  const handleExcelExport = () => {
+    if (onExportExcel) {
+      // Use custom handler if provided
+      onExportExcel();
+    } else if (excelConfig) {
+      // Use the hook to export Excel
+      console.log("🎯 Exporting Excel with config:", excelConfig);
+      const result = exportToExcel(excelConfig);
+      
+      if (result.success) {
+        console.log("✅ Excel exported successfully");
+      } else {
+        console.error("❌ Excel export failed:", result.message, result.error);
+      }
+    } else {
+      console.warn("⚠️ No Excel export configuration provided");
+    }
+  };
+
   const exportItems = [
     {
       icon: FileText,
@@ -51,7 +74,7 @@ export function ExportButtons({
     },
     {
       icon: FileSpreadsheet,
-      action: onExportExcel,
+      action: handleExcelExport,
       label: "Excel",
     },
     {

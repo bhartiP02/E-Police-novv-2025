@@ -5,13 +5,14 @@ import { useState } from 'react';
 export interface FieldConfig {
   name: string;
   label: string;
-  type: 'text' | 'select' | 'textarea' | 'number' | 'email' | 'password';
+  type: 'text' | 'select' | 'textarea' | 'number' | 'email' | 'password'| 'custom';
   placeholder?: string;
   required?: boolean;
   options?: { value: string; label: string }[];
   className?: string;
   rows?: number;
   disabled?: boolean;
+  customElement?: React.ReactNode;
 
   // Support pre-filled values (needed in EditModal)
   defaultValue?: string | number;
@@ -96,6 +97,12 @@ const AddSection: React.FC<AddSectionProps> = ({
       onFocus: field.customProps?.onFocus,
       onClick: field.customProps?.onClick,
     };
+
+    // ADD THIS JUST BEFORE the switch(field.type)
+  if (field.type === "custom" && field.customElement) {
+    return field.customElement;
+  }
+
 
     switch (field.type) {
       case 'select':

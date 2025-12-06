@@ -40,5 +40,18 @@ body {
   -ms-overflow-style: none;
 }
 
+sselect option {
+  color: #000 !important;
+}
 
+/* Fix text color for shadcn / custom React dropdown items */
+[data-slot="option"],
+[data-slot="item"],
+[role="option"],
+[role="listbox"] *,
+select,
+select option {
+  color: black !important;
+  background: white !important;
+}
 

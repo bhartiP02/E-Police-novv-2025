@@ -68,6 +68,12 @@ const EditModal: React.FC<EditModalProps> = ({
   const renderField = (f: FieldConfig) => {
     const value = formData[f.name] || "";
 
+    // ADD THIS BEFORE THE SWITCH CASE
+    if (f.type === "custom" && f.customElement) {
+      return f.customElement;
+    }
+
+
     switch (f.type) {
       case "select":
         return (

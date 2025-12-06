@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "E-Police",
-  description: "Track Pertrolling Record of Polica Stations",
+  description: "Track Pertrolling Record of Police Stations",
 };
 
 export default function RootLayout({

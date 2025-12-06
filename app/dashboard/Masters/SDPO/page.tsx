@@ -10,6 +10,7 @@ import { ColumnVisibilitySelector } from "@/component/ui/Column-Visibility/colum
 import { AlertPopover, Toast } from "@/component/ui/AlertPopover";
 import EditModal from "@/component/ui/EditModal/editModal";
 import { useExportPdf, ExportPdfOptions } from "@/hook/UseExportPdf/useExportPdf";
+import { useExportExcel, ExportExcelOptions } from "@/hook/UseExportExcel/useExportExcel";
 
 interface SDPORow {
   id: number;
@@ -95,10 +96,11 @@ export default function SDPOPage() {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [totalCount, setTotalCount] = useState(0);
   const { exportToPdf } = useExportPdf();
+  const { exportToExcel } = useExportExcel();
 
-  // -----------------------------
+  // ============================================
   // Helper Functions
-  // -----------------------------
+  // ============================================
   const showToast = useCallback((message: string, type: "success" | "error") => {
     setToast({ isVisible: true, message, type });
     setTimeout(() => setToast({ isVisible: false, message: "", type: "success" }), 3000);
@@ -284,6 +286,9 @@ export default function SDPOPage() {
     fetchSDPOs(pagination.pageIndex, pagination.pageSize, searchQuery);
   }, [fetchSDPOs, pagination.pageIndex, pagination.pageSize, searchQuery]);
 
+  /* ============================================
+     PDF EXPORT CONFIG
+  ============================================ */
   const pdfExportConfig: ExportPdfOptions = useMemo(() => ({
     filename: `sdpo-master-report-${new Date()
       .toLocaleDateString("en-GB")
@@ -292,6 +297,39 @@ export default function SDPOPage() {
     title: "SDPO Master Report",
     orientation: "landscape",
     pageSize: "a4",
+
+    columns: [
+      { header: "SDPO Name", accessorKey: "name" },
+      { header: "District", accessorKey: "district_name" },
+      { header: "City", accessorKey: "city_name" },
+      {
+        header: "Status",
+        accessorKey: "status",
+        formatter: (value) => (value === "Active" ? "Active" : "Inactive"),
+      },
+    ],
+
+    data: sdpos,
+
+    showSerialNumber: true,
+    serialNumberHeader: "S.NO.",
+    projectName: "E-Police",
+    exportDate: true,
+    showTotalCount: true,
+    searchQuery: searchQuery || "All SDPOs",
+    userRole: "admin",
+  }), [sdpos, searchQuery]);
+
+  /* ============================================
+     EXCEL EXPORT CONFIG
+  ============================================ */
+  const excelExportConfig: ExportExcelOptions = useMemo(() => ({
+    filename: `sdpo-master-report-${new Date()
+      .toLocaleDateString("en-GB")
+      .replace(/\//g, "-")}.xlsx`,
+
+    sheetName: "SDPOs",
+    title: "SDPO Master Report",
 
     columns: [
       { header: "SDPO Name", accessorKey: "name" },
@@ -854,21 +892,6 @@ export default function SDPOPage() {
     fetchCitiesByDistrict
   ]);
 
-  const handleExportPdf = useCallback(() => {
-  const result = exportToPdf(pdfExportConfig);
-    if (result.success) showToast("PDF exported successfully!", "success");
-    else showToast("Failed to export PDF", "error");
-  }, [exportToPdf, pdfExportConfig, showToast]);
-
-
-  const handleExportExcel = useCallback(() => {
-    showToast("Excel export functionality - Coming soon!", "success");
-  }, [showToast]);
-
-  const handlePrint = useCallback(() => {
-    window.print();
-  }, []);
-
   // ============================================
   // TABLE CONFIGURATION
   // ============================================
@@ -917,8 +940,7 @@ export default function SDPOPage() {
           <div className="flex items-center gap-3 flex-shrink-0">
             <ExportButtons
               pdfConfig={pdfExportConfig}
-              onExportExcel={handleExportExcel}
-              onPrint={handlePrint}
+              excelConfig={excelExportConfig}
             />
             <ColumnVisibilitySelector
               columns={table.getAllColumns()}
@@ -933,7 +955,7 @@ export default function SDPOPage() {
               debounceDelay={400}
               onSearch={async (query: string) => {
                 handleSearch(query);
-                return []; // MUST return something because SearchComponent expects Promise<any[]>
+                return [];
               }}
               serverSideSearch={true}
             />
@@ -949,7 +971,6 @@ export default function SDPOPage() {
           setIsEditModalOpen(false);
           setEditingSdpo(null);
           setEditFormData(null);
-          // Reset hierarchy data when modal closes
           setEditStates([]);
           setEditDistricts([]);
           setEditCities([]);

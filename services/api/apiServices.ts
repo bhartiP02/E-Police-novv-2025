@@ -33,4 +33,14 @@ export const api = {
     const response = await axios.delete<T>(url, { data }); // 👈 force request body
     return response.data;
   },
+
+  // SPECIAL GET for downloading files (Excel, PDF, images, etc.)
+  getBlob: async (url: string, params?: object) => {
+    const response = await axios.get(url, {
+      params,
+      responseType: "blob", // IMPORTANT
+    });
+    return response; 
+  },
+
 };

@@ -10,6 +10,7 @@ import { ColumnVisibilitySelector } from "@/component/ui/Column-Visibility/colum
 import { AlertPopover, Toast } from "@/component/ui/AlertPopover";
 import EditModal from "@/component/ui/EditModal/editModal";
 import { useExportPdf, ExportPdfOptions } from "@/hook/UseExportPdf/useExportPdf";
+import { useExportExcel, ExportExcelOptions } from "@/hook/UseExportExcel/useExportExcel";
 
 
 interface CityRow {
@@ -79,6 +80,7 @@ export default function CitiesPage() {
   const [editDistricts, setEditDistricts] = useState<District[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const { exportToPdf } = useExportPdf();
+  const { exportToExcel } = useExportExcel();
 
 
   const [toast, setToast] = useState<{ isVisible: boolean; message: string; type: "success" | "error" }>({
@@ -288,16 +290,12 @@ export default function CitiesPage() {
 
 
   const handleSearch = useCallback(async (query: string): Promise<Record<string, any>[]> => {
-    // reset to first page
     setSearchQuery(query);
     setPagination(prev => ({ ...prev, pageIndex: 0 }));
 
-    // call fetchCities to perform server-side fetch and return the results
-    // Use the current pageSize from pagination state
     const pageSize = pagination.pageSize ?? 10;
     const result = await fetchCities(0, pageSize, query);
 
-    // cast to the shape expected by SearchComponent (Record<string, any>[])
     return result as unknown as Record<string, any>[];
   }, [fetchCities, pagination.pageSize]);
 
@@ -321,37 +319,74 @@ export default function CitiesPage() {
       setFilteredDistricts(districtsData);
     }, [currentStateId, isDistrictsLoading, fetchDistrictsByState]);
 
+    /* ============================================
+       PDF EXPORT CONFIG
+    ============================================ */
     const pdfExportConfig: ExportPdfOptions = useMemo(() => ({
-    filename: `cities-master-report-${new Date()
-      .toLocaleDateString("en-GB")
-      .replace(/\//g, "-")}.pdf`,
+      filename: `cities-master-report-${new Date()
+        .toLocaleDateString("en-GB")
+        .replace(/\//g, "-")}.pdf`,
 
-    title: "Cities Master Report",
-    orientation: "landscape",
-    pageSize: "a4",
+      title: "Cities Master Report",
+      orientation: "landscape",
+      pageSize: "a4",
 
-    columns: [
-      { header: "City Name", accessorKey: "city_name" },
-      { header: "District", accessorKey: "district_name" },
-      { header: "State", accessorKey: "state_name" },
-      { header: "Country", accessorKey: "country_name" },
-      {
-        header: "Status",
-        accessorKey: "status",
-        formatter: (value) => (value === "Active" ? "Active" : "Inactive"),
-      },
-    ],
+      columns: [
+        { header: "City Name", accessorKey: "city_name" },
+        { header: "District", accessorKey: "district_name" },
+        { header: "State", accessorKey: "state_name" },
+        { header: "Country", accessorKey: "country_name" },
+        {
+          header: "Status",
+          accessorKey: "status",
+          formatter: (value) => (value === "Active" ? "Active" : "Inactive"),
+        },
+      ],
 
-    data: cities,
+      data: cities,
 
-    showSerialNumber: true,
-    serialNumberHeader: "S.NO.",
-    projectName: "E-Police",
-    exportDate: true,
-    showTotalCount: true,
-    searchQuery: searchQuery || "All cities",
-    userRole: "admin",
-  }), [cities, searchQuery]);
+      showSerialNumber: true,
+      serialNumberHeader: "S.NO.",
+      projectName: "E-Police",
+      exportDate: true,
+      showTotalCount: true,
+      searchQuery: searchQuery || "All cities",
+      userRole: "admin",
+    }), [cities, searchQuery]);
+
+    /* ============================================
+       EXCEL EXPORT CONFIG
+    ============================================ */
+    const excelExportConfig: ExportExcelOptions = useMemo(() => ({
+      filename: `cities-master-report-${new Date()
+        .toLocaleDateString("en-GB")
+        .replace(/\//g, "-")}.xlsx`,
+
+      sheetName: "Cities",
+      title: "Cities Master Report",
+
+      columns: [
+        { header: "City Name", accessorKey: "city_name" },
+        { header: "District", accessorKey: "district_name" },
+        { header: "State", accessorKey: "state_name" },
+        { header: "Country", accessorKey: "country_name" },
+        {
+          header: "Status",
+          accessorKey: "status",
+          formatter: (value) => (value === "Active" ? "Active" : "Inactive"),
+        },
+      ],
+
+      data: cities,
+
+      showSerialNumber: true,
+      serialNumberHeader: "S.NO.",
+      projectName: "E-Police",
+      exportDate: true,
+      showTotalCount: true,
+      searchQuery: searchQuery || "All cities",
+      userRole: "admin",
+    }), [cities, searchQuery]);
 
 
   const fieldClassName = "w-full border rounded px-3 py-2 text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500";
@@ -562,15 +597,6 @@ export default function CitiesPage() {
 
 
 
-  const handleExportPdf = useCallback(() => {
-    const result = exportToPdf(pdfExportConfig);
-    if (result.success) showToast("PDF exported successfully!", "success");
-    else showToast("Failed to export PDF", "error");
-  }, [exportToPdf, pdfExportConfig, showToast]);
-
-  const handleExportExcel = useCallback(() => showToast("Excel export functionality - Coming soon!", "success"), [showToast]);
-  const handlePrint = useCallback(() => window.print(), []);
-
   const handleAddCity = useCallback(async (formData: Record<string, string>) => {
     try {
       if (!formData.country_id || !formData.state_id || !formData.district_id) {
@@ -601,18 +627,15 @@ export default function CitiesPage() {
       if (!city) return;
 
       try {
-        // 1) Fetch latest details by ID (ONLY this API on edit open)
         const detail = await fetchCityDetail(city.id);
         if (!detail) {
           showToast("Failed to load city details", "error");
           return;
         }
 
-        // 2) Save both: row (for names) + detail (for ids & other fields)
         setEditingCity(city);
         setCityDetail(detail);
 
-        // 3) Inject ONLY currently selected country into options
         setCountries([
           {
             id: detail.country_id,
@@ -620,7 +643,6 @@ export default function CitiesPage() {
           },
         ]);
 
-        // 4) Inject ONLY currently selected state into options
         setEditStates([
           {
             id: detail.state_id,
@@ -630,7 +652,6 @@ export default function CitiesPage() {
           },
         ]);
 
-        // 5) Inject ONLY currently selected district into options
         setEditDistricts([
           {
             id: detail.district_id,
@@ -639,7 +660,6 @@ export default function CitiesPage() {
           },
         ]);
 
-        // 6) Open modal
         setIsEditModalOpen(true);
       } catch (error) {
         console.error("Error in edit preparation:", error);
@@ -736,7 +756,10 @@ export default function CitiesPage() {
       <div className="mt-6">
         <div className="flex justify-between items-center mb-4 gap-4">
           <div className="flex items-center gap-3 flex-shrink-0">
-            <ExportButtons pdfConfig={pdfExportConfig} />
+            <ExportButtons 
+              pdfConfig={pdfExportConfig}
+              excelConfig={excelExportConfig}
+            />
             <ColumnVisibilitySelector columns={table.getAllColumns()} backgroundColor="#EACEFF" textColor="#000000" />
           </div>
           <div className="w-full max-w-xs">
