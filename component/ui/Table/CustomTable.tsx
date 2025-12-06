@@ -59,27 +59,29 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
 );
 TableRow.displayName = "TableRow";
 
-const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<HTMLTableCellElement>>(
-  ({ className, ...props }, ref) => (
-    <th
-      ref={ref}
-      className={`h-12 px-4 text-left align-middle font-medium ${className || ""}`}
-      {...props}
-    />
-  )
-);
-TableHead.displayName = "TableHead";
+const TableHead = React.forwardRef<
+  HTMLTableCellElement,
+  React.HTMLAttributes<HTMLTableCellElement>
+>(({ className, ...props }, ref) => (
+  <th
+    ref={ref}
+    className={`h-12 px-4 text-left align-middle font-medium ${className || ""}`}
+    {...props}
+  />
+));
 
-const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<HTMLTableCellElement>>(
-  ({ className, ...props }, ref) => (
-    <td
-      ref={ref}
-      className={`p-4 align-middle ${className || ""}`}
-      {...props}
-    />
-  )
-);
-TableCell.displayName = "TableCell";
+
+const TableCell = React.forwardRef<
+  HTMLTableCellElement,
+  React.HTMLAttributes<HTMLTableCellElement>
+>(({ className, ...props }, ref) => (
+  <td
+    ref={ref}
+    className={`p-4 align-middle ${className || ""}`}
+    {...props}
+  />
+));
+
 
 const Skeleton = ({ className }: { className?: string }) => (
   <div className={`animate-pulse rounded-md bg-gray-200 ${className || ""}`} />

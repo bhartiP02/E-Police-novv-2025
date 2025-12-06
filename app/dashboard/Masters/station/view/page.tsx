@@ -6,6 +6,7 @@ import PoliceStationInfoCard from "@/component/ui/PoliceStationView/PoliceStatio
 import PoliceStationTabs from "@/component/ui/PoliceStationView/PoliceStationTabs";
 import { api } from "@/services/api/apiServices";
 
+
 interface PoliceStationDetails {
   id: number;
   name: string;
