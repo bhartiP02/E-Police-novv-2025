@@ -699,7 +699,7 @@ export default function DistrictPage() {
             <ColumnVisibilitySelector columns={table.getAllColumns()} />
           </div>
 
-          <div className="w-64">
+          <div className="w-full max-w-xs">
             <SearchComponent
               placeholder="Search Districts..."
               debounceDelay={400}

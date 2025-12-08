@@ -358,8 +358,16 @@ export default function SDPOPage() {
   // ============================================
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
-    setPagination(prev => ({ ...prev, pageIndex: 0 }));
-  }, []);
+
+    // Reset page only when user enters NEW search text
+    setPagination(prev => {
+      if (query !== searchQuery) {
+        return { ...prev, pageIndex: 0 };
+      }
+      return prev; // Do NOT reset pagination on table navigation
+    });
+  }, [searchQuery]);
+
 
   // ADD SECTION DROPDOWN HANDLERS
   const handleCountryDropdownClick = useCallback(async () => {
