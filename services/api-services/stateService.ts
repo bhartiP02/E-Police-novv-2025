@@ -19,6 +19,7 @@ export const stateService = {
     return Array.isArray(res.data) ? res.data : res.data?.data ?? [];
   },
 
+
   getStateById: async (id: number): Promise<State> => {
     const res = await api.get(`/states/${id}`);
     return res.data?.data ?? res.data;

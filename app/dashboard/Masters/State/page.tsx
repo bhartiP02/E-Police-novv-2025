@@ -72,7 +72,7 @@ export default function StatePage() {
   // FETCH COUNTRIES
   const fetchCountries = useCallback(async () => {
     try {
-      const res = await fetch("/api/states/getcountry").then((r) => r.json());
+      const res = await stateService.getCountries();
       setCountries(res);
     } catch (error) {
       console.error("Error fetching countries:", error);
@@ -80,7 +80,7 @@ export default function StatePage() {
     }
   }, [showToast]);
 
-  const handleCountryDropdownClick = useCallback(async () => {
+ const handleCountryDropdownClick = useCallback(async () => {
     if (countries.length === 0) await fetchCountries();
   }, [countries.length, fetchCountries]);
 

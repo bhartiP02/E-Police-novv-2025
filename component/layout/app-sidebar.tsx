@@ -87,11 +87,11 @@ export function AppSidebar({ isOpen, onClose }: AppSidebarProps) {
       title: "Police Master",
       icon: "👮",
       submenu: [
+        { title: "Police Designation", url: "/dashboard/police-master/police-designation"},
+        { title: "Sensitive Area", url: "/dashboard/police-master/Sensitive-area"},
         { title: "E-polish", url: "/dashboard/police-master/E-polish"},
         { title: "Manage Polish Station", url: "/dashboard/police-master/manage-polish-station"},
-        { title: "Police Designation", url: "/dashboard/police-master/police-designation"},
         { title: "Police Eye", url: "/dashboard/police-master/police-eye"},
-        { title: "Sensitive Area", url: "/dashboard/police-master/Sensitive-area"},
         { title: "Vehicles", url: "/dashboard/police-master/vehicles"},
       ],
     },

@@ -6,7 +6,7 @@ import { AppSidebar } from "@/component/layout/app-sidebar";
 import Navbar from "@/component/layout/navbar";
 import { Toaster } from "sonner";
 
-// ⭐ React Query
+// React Query
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 
@@ -21,7 +21,7 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    // ⭐ Wrap entire layout with QueryClientProvider
+    //  Wrap entire layout with QueryClientProvider
     <QueryClientProvider client={queryClient}>
       <div className="flex h-screen w-full overflow-hidden bg-[#0F0F0F]">
         {/* Sidebar */}
