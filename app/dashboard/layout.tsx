@@ -11,46 +11,42 @@ import { useAuthStore } from "@/store/authStore";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 
-// Create Query Client (once)
 const queryClient = new QueryClient();
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+
+  // ✅ FIX: Use individual selectors — NO object returned
   const user = useAuthStore((s) => s.user);
-  
-  // ========= MAIN FIX =========
-  // Sidebar is ALWAYS open on desktop (lg screens)
+  const isHydrated = useAuthStore((s) => s.isHydrated);
+
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // Check authentication
+  // Wait for hydration before redirecting
   useEffect(() => {
+    if (!isHydrated) return;
+
     if (!user) {
       router.replace("/login");
     }
-  }, [user, router]);
+  }, [isHydrated, user, router]);
 
-  // Auto-enable sidebar if screen is large
+  // Sidebar always open on large screens
   useEffect(() => {
     const checkScreen = () => {
       if (window.innerWidth >= 1024) {
         setSidebarOpen(true);
       }
     };
-
-    checkScreen(); // run once
+    checkScreen();
     window.addEventListener("resize", checkScreen);
-
     return () => window.removeEventListener("resize", checkScreen);
   }, []);
 
-  // Show loading or nothing while checking auth
-  if (!user) {
+  // While hydrating, show loader
+  if (!isHydrated) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-[#0F0F0F]">
+      <div className="flex h-screen items-center justify-center bg-[#0F0F0F]">
         <div className="text-white">Loading...</div>
       </div>
     );
@@ -59,20 +55,15 @@ export default function DashboardLayout({
   return (
     <QueryClientProvider client={queryClient}>
       <div className="flex h-screen w-full overflow-hidden bg-[#0F0F0F]">
-        
-        {/* 👍 SIDEBAR ALWAYS VISIBLE ON DESKTOP */}
+
         <AppSidebar
           isOpen={sidebarOpen}
-          onClose={() => setSidebarOpen(false)} // Only closes on mobile
+          onClose={() => setSidebarOpen(false)}
         />
 
-        {/* PAGE CONTENT */}
         <div className="flex-1 overflow-auto bg-[#0F0F0F] text-white">
           <div className="my-6 mr-6 bg-white space-y-6 py-8 px-6 rounded-4xl">
-            {/* NAVBAR */}
             <Navbar onMenuClick={() => setSidebarOpen((prev) => !prev)} />
-
-            {/* CHILDREN CONTENT */}
             {children}
           </div>
         </div>
