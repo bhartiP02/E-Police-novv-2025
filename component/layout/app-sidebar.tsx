@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/store/authStore";
+import { LayoutDashboard } from "lucide-react";
 
 const COLORS = {
   background: "#0F0F0F",
@@ -152,7 +153,7 @@ export function AppSidebar({ isOpen, onClose }) {
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
         style={{
-          width: "270px",
+          width: "250px",
           backgroundColor: COLORS.background,
           borderRight: `1px solid ${COLORS.border}`,
         }}
@@ -161,10 +162,10 @@ export function AppSidebar({ isOpen, onClose }) {
         <div className="px-6 py-8 border-b" style={{ borderColor: COLORS.border }}>
           <div className="flex flex-col items-center">
             {/* User Avatar with subtle shadow */}
-            <div className="relative mb-4">
+            <div className="relative mb-2">
               <img 
                 src="/user-avatar.png" 
-                className="w-24 h-24 rounded-full object-cover shadow-lg"
+                className="w-22 h-22 rounded-full object-cover shadow-lg"
               />
             </div>
 
@@ -174,23 +175,23 @@ export function AppSidebar({ isOpen, onClose }) {
             {/* User Role and District */}
             <p className="text-gray-400 text-xs mt-1 text-center">{user.designation_type}</p>
             <p className="text-gray-500 text-xs mt-0.5 text-center">District: {user.district_id}</p>
+           
+          </div>
+        </div>
 
-            {/* Dashboard Button */}
-            <Link
+        {/* SIDEBAR MENU */}
+        <div className="flex-1 overflow-y-auto no-scrollbar px-1 py-2">
+           <Link
               href="/dashboard"
-              className={`mt-5 w-full py-2.5 rounded-lg text-center text-sm font-medium transition-all duration-200 ease-out flex items-center justify-center gap-2 hover:shadow-lg transform hover:scale-105 ${
+              className={`mt-5 px-4 py-2.5 rounded-lg text-center text-sm font-medium transition-all duration-200 ease-out flex items-center justify-center gap-2 hover:shadow-lg transform hover:scale-105 ${
                 pathname.startsWith("/dashboard")
                   ? "bg-[#9A65C2] shadow-md"
                   : "bg-[#9A65C299] hover:bg-[#9A65C2]"
               }`}
             >
-              📊 Dashboard
+              <LayoutDashboard size={18} />
+              Dashboard
             </Link>
-          </div>
-        </div>
-
-        {/* SIDEBAR MENU */}
-        <div className="flex-1 overflow-y-auto no-scrollbar px-2 py-3">
           {sidebarData
             .filter((item) => item.roles.includes(realRole))
             .map((item) =>
