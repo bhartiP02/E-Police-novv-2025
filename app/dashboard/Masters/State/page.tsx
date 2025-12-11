@@ -101,23 +101,16 @@ export default function StatePage() {
   // ✅ FETCH STATE BY ID AND OPEN EDIT MODAL - ONLY FOR SPECIFIC STATE
   const handleEdit = useCallback(async (state: State) => {
     try {
-      // Set loading state ONLY for this specific state
       setLoadingStateId(state.id);
-
-      // ✅ FETCH THE INDIVIDUAL STATE DETAILS FROM API
       const stateDetail = await stateService.getStateById(state.id);
-
-      // Set the fresh data from API
       setEditingState(stateDetail);
-
-      // Set country for dropdown
       setCountries([
         { id: stateDetail.country_id, country_name: stateDetail.country_name },
       ]);
 
       // Open modal
       setIsEditModalOpen(true);
-      showToast("State details loaded successfully!", "success");
+
     } catch (error) {
       console.error("Error fetching state details:", error);
       showToast("Failed to load state details. Please try again.", "error");

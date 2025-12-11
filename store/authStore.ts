@@ -17,6 +17,7 @@ interface UserData {
   designation_type: "Admin" | "Head_Person" | "SDPO" | "Station_Head" | "Police";
   police_station_id?: number;
   district_id?: number;
+  district_name: string;
 }
 
 interface AuthState {

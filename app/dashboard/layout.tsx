@@ -68,7 +68,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
 
-        <Toaster richColors closeButton />
+        <Toaster position="top-center" richColors expand={true} />
       </div>
 
       <ReactQueryDevtools initialIsOpen={false} />

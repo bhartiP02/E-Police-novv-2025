@@ -19,6 +19,7 @@ interface SubMenuItem {
   title: string;
   url: string;
   icon?: string;
+  roles?: string[];
 }
 
 interface MenuItem {
@@ -34,34 +35,43 @@ export function AppSidebar({ isOpen, onClose }) {
   const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
 
+  // Role from authenticated user
   const realRole = user?.designation_type;
 
+  // ------------------------------------------
+  // ROLE-BASED PROFILE IMAGES
+  // ------------------------------------------
+  const roleProfileImages = {
+    Admin: "/Admin.png",
+    Head_Person: "/Head_Person.png",
+    SDPO: "/SDPO.png",
+    Station_Head: "/Station_Head.png",
+    Police: "/Police.png",
+  };
+
+  const profileImage = roleProfileImages[realRole] || "/user-avatar.png";
+
+  // Sidebar menu expand state
   const [expandedMenus, setExpandedMenus] = React.useState({});
 
   const toggleMenu = (menu: string) =>
     setExpandedMenus((prev) => ({ ...prev, [menu]: !prev[menu] }));
 
-  if (!user) return null;
+  // ------------------------------------------
+  // SIDEBAR CONFIG
+  // ------------------------------------------
 
-  // --------------------------------
-  //  ROLE-BASED SIDEBAR CONFIG
-  // --------------------------------
   const sidebarData: MenuItem[] = [
-    // LIVE TRACKING
     {
       title: "Live Tracking",
       url: "/dashboard/live-tracking",
       roles: ["Admin", "Head_Person", "SDPO", "Station_Head", "Police"],
     },
-
-    // CHECKPOST
     {
       title: "Checkpost/Nakabandi",
       url: "/dashboard/check-post",
       roles: ["Admin", "Head_Person", "SDPO", "Station_Head", "Police"],
     },
-
-    // MASTERS
     {
       title: "Manage Masters",
       roles: ["Admin", "Head_Person", "SDPO"],
@@ -74,22 +84,18 @@ export function AppSidebar({ isOpen, onClose }) {
         { title: "Police User", url: "/dashboard/Masters/police-user", roles: ["Admin", "Head_Person", "SDPO"] },
       ],
     },
-
-    // POLICE MASTERS
     {
       title: "Police Masters",
       roles: ["Admin", "Head_Person", "SDPO", "Station_Head"],
       submenu: [
-        { title: "Police Designation", url: "/dashboard/police-master/police-designation" , roles: ["Admin", "Head_Person", "SDPO"]},
-        { title: "Sensitive Areas", url: "/dashboard/police-master/Sensitive-area",roles: ["Admin", "Head_Person", "SDPO","Station_Head","Police"] },
-        { title: "E-Polish", url: "/dashboard/police-master/E-polish",roles: ["Admin", "Head_Person", "SDPO"] },
+        { title: "Police Designation", url: "/dashboard/police-master/police-designation", roles: ["Admin", "Head_Person", "SDPO"] },
+        { title: "Sensitive Areas", url: "/dashboard/police-master/Sensitive-area", roles: ["Admin", "Head_Person", "SDPO", "Station_Head", "Police"] },
+        { title: "E-Polish", url: "/dashboard/police-master/E-polish", roles: ["Admin", "Head_Person", "SDPO"] },
         { title: "Manage Police Station", url: "/dashboard/police-master/manage-polish-station", roles: ["Admin", "Head_Person", "SDPO"] },
-        { title: "Police Eye", url: "/dashboard/police-master/police-eye", roles: ["Admin", "Head_Person", "SDPO","Station_Head","Police"] },
-        { title: "Vehicles", url: "/dashboard/police-master/vehicles",roles: ["Admin", "Head_Person", "SDPO","Station_Head","Police"] },
+        { title: "Police Eye", url: "/dashboard/police-master/police-eye", roles: ["Admin", "Head_Person", "SDPO", "Station_Head", "Police"] },
+        { title: "Vehicles", url: "/dashboard/police-master/vehicles", roles: ["Admin", "Head_Person", "SDPO", "Station_Head", "Police"] },
       ],
     },
-
-    // TASKS
     {
       title: "Tasks",
       roles: ["Admin", "Head_Person", "SDPO", "Station_Head", "Police"],
@@ -99,36 +105,26 @@ export function AppSidebar({ isOpen, onClose }) {
         { title: "Task Categories", url: "/dashboard/Task/polish-task-categories", roles: ["Admin", "Head_Person", "SDPO"] },
       ],
     },
-
-    // INCIDENCE
     {
       title: "Incidence Spot",
       url: "/dashboard/Incidence-spot",
       roles: ["Admin", "Head_Person", "SDPO", "Station_Head", "Police"],
     },
-
-    // MANAGE POLICE USERS
     {
       title: "Manage Police Users",
       url: "/dashboard/manage-police-user",
       roles: ["Admin", "Head_Person", "SDPO", "Station_Head"],
     },
-
-    // CRIMINALS
     {
       title: "Criminals",
       url: "/dashboard/Criminals",
       roles: ["Admin", "Head_Person", "SDPO", "Station_Head", "Police"],
     },
-
-    // PATROLLING ATTENDANCE
     {
       title: "Patrolling Attendance",
       url: "/dashboard/patrolling-attendance",
       roles: ["Admin", "Head_Person", "SDPO", "Station_Head", "Police"],
     },
-
-    // REPORTS
     {
       title: "Reports",
       roles: ["Admin", "Head_Person", "SDPO", "Station_Head", "Police"],
@@ -141,12 +137,22 @@ export function AppSidebar({ isOpen, onClose }) {
     },
   ];
 
-  // -------------------------------------
+  // -------------------------------------------------------------------
+  // IMPORTANT FIX:
+  // Don't return early above hooks → causes "Rendered fewer hooks" error
+  // Instead, return empty JSX safely here.
+  // -------------------------------------------------------------------
+  if (!user) return <></>;
+
+  // -------------------------------------------------------------------
   // RENDER SIDEBAR
-  // -------------------------------------
+  // -------------------------------------------------------------------
+
   return (
     <>
-      {isOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={onClose} />}
+      {isOpen && (
+        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={onClose} />
+      )}
 
       <div
         className={`fixed lg:static inset-y-0 left-0 z-50 h-screen flex flex-col transition-transform duration-300 ${
@@ -160,26 +166,27 @@ export function AppSidebar({ isOpen, onClose }) {
       >
         {/* TOP ROLE BAR */}
         <div className="w-full py-2 flex items-center justify-center">
-          <p className="text-white text-lg font-semibold m-0">Admin</p>
+          <p className="text-white text-lg font-semibold m-0">{realRole}</p>
         </div>
 
         {/* USER INFO */}
         <div className="px-3 py-3 border-b" style={{ borderColor: COLORS.border }}>
           <div className="flex flex-col items-center">
-            <div className="relative mb-2">
-              <img
-                src="/user-avatar.png"
-                className="w-16 h-16 rounded-full object-cover shadow-md"
-              />
-            </div>
+            <img
+              src={profileImage}
+              alt="Profile"
+              className="w-16 h-16 rounded-full object-cover shadow-md mb-2"
+            />
+
             <p className="text-white text-sm font-semibold m-0">{user.name}</p>
             <p className="text-gray-400 text-[10px] m-0">{user.designation_type}</p>
-            <p className="text-gray-500 text-[10px] m-0">District: {user.district_id}</p>
+            <p className="text-gray-500 text-[10px] m-0">District: {user.district_name}</p>
           </div>
         </div>
 
         {/* SIDEBAR MENU */}
         <div className="flex-1 overflow-y-auto no-scrollbar px-1 py-2">
+          {/* Dashboard Link */}
           <Link
             href="/dashboard"
             className={`mt-2 mx-auto w-[85%] px-3 py-2 rounded-md text-center text-sm font-medium 
@@ -187,12 +194,14 @@ export function AppSidebar({ isOpen, onClose }) {
               hover:scale-105 ${
                 pathname.startsWith("/dashboard")
                   ? "bg-[#9A65C2] shadow-md"
-                  : "bg-[#9A65C299] hover:bg-[#9A65C2]"
+                  : "bg-transparent hover:bg-[#9A65C299]"
               }`}
           >
             <LayoutDashboard size={16} />
             Dashboard
           </Link>
+
+          {/* MENU ITEMS */}
           {sidebarData
             .filter((item) => item.roles.includes(realRole))
             .map((item) =>
@@ -200,11 +209,10 @@ export function AppSidebar({ isOpen, onClose }) {
                 <div key={item.title}>
                   <button
                     onClick={() => toggleMenu(item.title)}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-white transition-all duration-200 ease-out hover:bg-gray-800/60"
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-white transition-all duration-200 hover:bg-gray-800/60"
                   >
-                    {item.icon && <span>{item.icon}</span>}
                     <span className="text-sm flex-1 text-left font-medium">{item.title}</span>
-                    <span className="transition-transform duration-200 text-sm">{expandedMenus[item.title] ? "∨" : ">"}</span>
+                    <span className="transition-transform">{expandedMenus[item.title] ? "∨" : ">"}</span>
                   </button>
 
                   {expandedMenus[item.title] && (
@@ -217,7 +225,7 @@ export function AppSidebar({ isOpen, onClose }) {
                             <Link
                               key={sub.url}
                               href={sub.url}
-                              className="block px-6 py-2.5 text-sm transition-all duration-150 ease-out rounded-md mx-2 my-1"
+                              className="block px-6 py-2 text-sm rounded-md mx-2 my-1 transition-all"
                               style={{
                                 backgroundColor: active ? COLORS.primary : "transparent",
                                 color: COLORS.text,
@@ -234,7 +242,7 @@ export function AppSidebar({ isOpen, onClose }) {
                 <Link
                   key={item.url}
                   href={item.url!}
-                  className="flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ease-out"
+                  className="flex items-center gap-3 px-4 py-3 rounded-lg transition-all"
                   style={{
                     backgroundColor: pathname.startsWith(item.url!)
                       ? COLORS.primary
@@ -242,7 +250,6 @@ export function AppSidebar({ isOpen, onClose }) {
                     color: COLORS.text,
                   }}
                 >
-                  {item.icon && <span>{item.icon}</span>}
                   <span className="text-sm font-medium">{item.title}</span>
                 </Link>
               )
