@@ -34,8 +34,8 @@ export default function LoginPage() {
     try {
       const data = await loginUser(email, password);
 
-      if (data?.token) {
-        login(data.token);
+      if (data?.token && data?.user) {
+        login(data.token, data.user);     
         router.push("/dashboard");
       } else {
         alert("Invalid response from server.");

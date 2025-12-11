@@ -26,7 +26,7 @@ export default function StatePage() {
   const [countries, setCountries] = useState<Country[]>([]);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingState, setEditingState] = useState<State | null>(null);
-  const [isLoadingStateDetail, setIsLoadingStateDetail] = useState(false);
+  const [loadingStateId, setLoadingStateId] = useState<number | null>(null);
 
   const [toast, setToast] = useState({
     isVisible: false,
@@ -80,7 +80,7 @@ export default function StatePage() {
     }
   }, [showToast]);
 
- const handleCountryDropdownClick = useCallback(async () => {
+  const handleCountryDropdownClick = useCallback(async () => {
     if (countries.length === 0) await fetchCountries();
   }, [countries.length, fetchCountries]);
 
@@ -98,10 +98,11 @@ export default function StatePage() {
     [createState]
   );
 
-  // ✅ FETCH STATE BY ID AND OPEN EDIT MODAL
+  // ✅ FETCH STATE BY ID AND OPEN EDIT MODAL - ONLY FOR SPECIFIC STATE
   const handleEdit = useCallback(async (state: State) => {
     try {
-      setIsLoadingStateDetail(true);
+      // Set loading state ONLY for this specific state
+      setLoadingStateId(state.id);
 
       // ✅ FETCH THE INDIVIDUAL STATE DETAILS FROM API
       const stateDetail = await stateService.getStateById(state.id);
@@ -121,7 +122,8 @@ export default function StatePage() {
       console.error("Error fetching state details:", error);
       showToast("Failed to load state details. Please try again.", "error");
     } finally {
-      setIsLoadingStateDetail(false);
+      // Clear the loading state for this specific state
+      setLoadingStateId(null);
     }
   }, [showToast]);
 
@@ -236,9 +238,9 @@ export default function StatePage() {
             <button
               onClick={() => handleEdit(row.original)}
               className="px-3 py-1 bg-blue-200 rounded"
-              disabled={isLoadingStateDetail || isUpdateLoading}
+              disabled={loadingStateId === row.original.id || isUpdateLoading}
             >
-              {isLoadingStateDetail ? "Loading..." : "Edit"}
+              {loadingStateId === row.original.id ? "Loading..." : "Edit"}
             </button>
 
             <AlertPopover
@@ -264,7 +266,7 @@ export default function StatePage() {
       handleDeleteConfirm,
       isDeleteLoading,
       isUpdateLoading,
-      isLoadingStateDetail,
+      loadingStateId,
     ]
   );
 
@@ -288,7 +290,12 @@ export default function StatePage() {
 
   return (
     <div className="w-full min-h-screen bg-white px-6">
-      <Toast message={toast.message} type={toast.type} isVisible={toast.isVisible} />
+      {/* Toast - Positioned at top-center */}
+      {toast.isVisible && (
+        <div className="fixed top-0 left-1/2 -translate-x-1/2 z-50 pt-4 pointer-events-none">
+          <Toast message={toast.message} type={toast.type} isVisible={toast.isVisible} />
+        </div>
+      )}
 
       {/* Add Section */}
       <AddSection
@@ -358,9 +365,9 @@ export default function StatePage() {
           setEditingState(null);
         }}
         onSubmit={handleUpdateState}
-        isLoading={isUpdateLoading || isLoadingStateDetail}
+        isLoading={isUpdateLoading || loadingStateId !== null}
         loadingMessage={
-          isLoadingStateDetail ? "Loading state details..." : undefined
+          loadingStateId !== null ? "Loading state details..." : undefined
         }
         title="Edit State"
         fields={[

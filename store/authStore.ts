@@ -8,11 +8,23 @@ interface DecodedToken {
   role: string;
 }
 
+interface UserData {
+  id: number;
+  name: string;
+  email: string;
+  mobile: number;
+  designation_type: "Admin" | "Head_Person" | "SDPO" | "Station_Head" | "Police";
+  police_station_id?: number;
+  district_id?: number;
+}
+
 interface AuthState {
   isAuthenticated: boolean;
   token: string | null;
   decodedToken: DecodedToken | null;
-  login: (token: string) => void;
+  user: UserData | null;
+
+  login: (token: string, user: UserData) => void;
   logout: () => void;
 }
 
@@ -20,11 +32,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   token: null,
   decodedToken: null,
+  user: null,
 
-  login: (token: string) => {
-    // Save in cookie/localStorage
+  login: (token: string, user: UserData) => {
+    // Save token
     document.cookie = `token=${token}; path=/`;
     localStorage.setItem("token", token);
+    localStorage.setItem("user", JSON.stringify(user));
 
     // Decode token
     const decoded = jwtDecode<DecodedToken>(token);
@@ -33,13 +47,15 @@ export const useAuthStore = create<AuthState>((set) => ({
       isAuthenticated: true,
       token,
       decodedToken: decoded,
+      user,
     });
   },
 
   logout: () => {
-    // Clear cookie & localStorage
+    // Clear storage
     document.cookie = "token=; Max-Age=0; path=/";
     localStorage.removeItem("token");
+    localStorage.removeItem("user");
 
     // Clear react-query cache
     getQueryClient().clear();
@@ -48,6 +64,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       isAuthenticated: false,
       token: null,
       decodedToken: null,
+      user: null,
     });
   },
 }));

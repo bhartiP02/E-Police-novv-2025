@@ -20,10 +20,8 @@ import { useExportPdf, ExportPdfOptions } from "@/hook/UseExportPdf/useExportPdf
 import { useExportExcel, ExportExcelOptions } from "@/hook/UseExportExcel/useExportExcel";
 import { QrCode, MapPin, Eye, Printer, Download, Image as ImageIcon } from "lucide-react";
 import { SensitiveAreaPrint } from "@/component/ui/SensitiveAreaPrint/SensitiveAreaPrint";
+import ExcelUpload from "@/component/ui/SensitiveAreaExcelUpload/ExcelUpload";
 
-/* ============================================
-   TYPES
-============================================ */
 interface SensitiveAreaRow {
   id: number;
   address: string;
@@ -61,9 +59,6 @@ interface DropdownState {
   isLoadingPoliceStations: boolean;
 }
 
-/* ============================================
-   COMPONENT START
-============================================ */
 export default function SensitiveAreaPage() {
   const router = useRouter();
   const [sensitiveAreas, setSensitiveAreas] = useState<SensitiveAreaRow[]>([]);
@@ -91,7 +86,6 @@ export default function SensitiveAreaPage() {
 
   const BASE_URL = "http://104.251.216.83:4000";
 
-  // Dropdown states
   const [addDropdowns, setAddDropdowns] = useState<DropdownState>({
     districts: [],
     policeStations: [],
@@ -119,16 +113,11 @@ export default function SensitiveAreaPage() {
     isLoadingPoliceStations: false,
   });
 
-  /* ============================================
-     HELPER FUNCTIONS
-  ============================================ */
   const constructImageUrl = useCallback((url: string): string => {
     if (!url) return "";
-    
     if (url.startsWith('http://') || url.startsWith('https://')) {
       return url;
     }
-    
     let cleanedUrl = url;
     if (cleanedUrl.includes('/uploads/qrcodes//uploads/qrcodes/')) {
       cleanedUrl = cleanedUrl.replace('/uploads/qrcodes//uploads/qrcodes/', '/uploads/qrcodes/');
@@ -139,20 +128,13 @@ export default function SensitiveAreaPage() {
     if (!cleanedUrl.startsWith('/')) {
       cleanedUrl = '/' + cleanedUrl;
     }
-    
     return `${BASE_URL}${cleanedUrl}`;
   }, [BASE_URL]);
 
-  // Extract QR code from image path
   const extractQrCodeFromImagePath = useCallback((imagePath: string): string => {
     if (!imagePath) return "";
-    
-    // Extract filename from path
     const fileName = imagePath.split('/').pop() || "";
-    
-    // Remove extension and prefix
     let qrCode = fileName.replace('sensitive_area_', '').replace('.png', '');
-    
     return qrCode || "";
   }, []);
 
@@ -163,9 +145,6 @@ export default function SensitiveAreaPage() {
     }, 3000);
   }, []);
 
-  /* ============================================
-     API FUNCTIONS
-  ============================================ */
   const fetchDistrictsList = useCallback(async (): Promise<District[]> => {
     try {
       const resp = await api.get("/districts");
@@ -195,12 +174,10 @@ export default function SensitiveAreaPage() {
     async (pageIndex: number, pageSize: number, search: string) => {
       try {
         setLoading(true);
-
         let url = `/sensitive-areas?page=${pageIndex + 1}&limit=${pageSize}`;
         if (search.trim()) {
           url += `&search=${encodeURIComponent(search.trim())}`;
         }
-
         const response = await api.get(url);
         const dataBlock = response?.data?.data || response?.data?.result || response?.data || response;
         const rows = Array.isArray(dataBlock?.data) ? dataBlock.data : Array.isArray(dataBlock) ? dataBlock : [];
@@ -210,11 +187,8 @@ export default function SensitiveAreaPage() {
           if (!area.latitude || !area.longitude || area.latitude === "0" || area.longitude === "0") {
             status = "Incomplete";
           }
-          
           const qrcodeUrl = constructImageUrl(area.qrcode_url || area.image || "");
           const imageUrl = constructImageUrl(area.image_url || area.image || "");
-          
-          // Extract QR code from image path for display
           const qrCodeValue = extractQrCodeFromImagePath(area.image || "");
 
           return {
@@ -255,13 +229,10 @@ export default function SensitiveAreaPage() {
         const resp = await api.get(`/sensitive-areas/${id}`);
         const data = resp?.data?.data || resp?.data || resp || [];
         const area = Array.isArray(data) ? data[0] : data;
-
         if (!area) return null;
 
         const qrcodeUrl = constructImageUrl(area.qrcode_url || area.image || "");
         const imageUrl = constructImageUrl(area.image_url || area.image || "");
-        
-        // Extract QR code from image path
         const qrCodeValue = extractQrCodeFromImagePath(area.image || "");
 
         const norm: SensitiveAreaRow = {
@@ -278,7 +249,6 @@ export default function SensitiveAreaPage() {
           district_id: area.district_id || area.district?.id,
           police_station_id: area.police_station_id || area.policeStation?.id,
         };
-
         return norm;
       } catch (err) {
         console.error("Error fetching sensitive area by id:", err);
@@ -289,31 +259,38 @@ export default function SensitiveAreaPage() {
     [showToast, constructImageUrl, extractQrCodeFromImagePath]
   );
 
-  /* ============================================
-     EFFECTS
-  ============================================ */
   useEffect(() => {
     fetchSensitiveAreas(pagination.pageIndex, pagination.pageSize, searchQuery);
   }, [pagination.pageIndex, pagination.pageSize, searchQuery, fetchSensitiveAreas]);
 
-  /* ============================================
-     DROPDOWN HANDLERS
-  ============================================ */
   const handleDropdowns = useCallback(async (
     stateSetter: React.Dispatch<React.SetStateAction<DropdownState>>,
     dropdownType: 'districts' | 'policeStations',
     districtId?: string
   ) => {
     if (dropdownType === 'districts') {
-      stateSetter(prev => ({ ...prev, isLoadingDistricts: true }));
-      const districts = await fetchDistrictsList();
-      stateSetter(prev => ({ ...prev, districts, isLoadingDistricts: false }));
+      stateSetter(prev => {
+        if (prev.districts.length > 0 || prev.isLoadingDistricts) return prev;
+        return { ...prev, isLoadingDistricts: true };
+      });
+      const current = (await new Promise<DropdownState>(res => {
+        res(downloadDropdowns);
+      }));
+      if (current.districts.length === 0) {
+        const districts = await fetchDistrictsList();
+        stateSetter(prev => ({ ...prev, districts, isLoadingDistricts: false }));
+      } else {
+        stateSetter(prev => ({ ...prev, isLoadingDistricts: false }));
+      }
     } else if (dropdownType === 'policeStations' && districtId) {
-      stateSetter(prev => ({ ...prev, isLoadingPoliceStations: true }));
-      const policeStations = await fetchPoliceStationsByDistrict(districtId);
-      stateSetter(prev => ({ ...prev, policeStations, isLoadingPoliceStations: false }));
+      stateSetter(prev => {
+        if (prev.policeStations.length > 0 || prev.isLoadingPoliceStations) return prev;
+        return { ...prev, isLoadingPoliceStations: true };
+      });
+      const stations = await fetchPoliceStationsByDistrict(districtId);
+      stateSetter(prev => ({ ...prev, policeStations: stations, isLoadingPoliceStations: false }));
     }
-  }, [fetchDistrictsList, fetchPoliceStationsByDistrict]);
+  }, [fetchDistrictsList, fetchPoliceStationsByDistrict, downloadDropdowns]);
 
   const handleDistrictChange = useCallback(async (
     stateSetter: React.Dispatch<React.SetStateAction<DropdownState>>,
@@ -325,15 +302,11 @@ export default function SensitiveAreaPage() {
       selectedPoliceStation: "",
       policeStations: []
     }));
-    
     if (districtId) {
       await handleDropdowns(stateSetter, 'policeStations', districtId);
     }
   }, [handleDropdowns]);
 
-  /* ============================================
-     EXPORT CONFIG
-  ============================================ */
   const pdfExportConfig: ExportPdfOptions = useMemo(() => ({
     filename: `sensitive-areas-report-${new Date().toLocaleDateString("en-GB").replace(/\//g, "-")}.pdf`,
     title: "Sensitive Areas Report",
@@ -384,17 +357,11 @@ export default function SensitiveAreaPage() {
     userRole: "admin",
   }), [sensitiveAreas, searchQuery]);
 
-  /* ============================================
-     SEARCH HANDLING
-  ============================================ */
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query.trim());
     setPagination(prev => ({ ...prev, pageIndex: 0 }));
   }, []);
 
-  /* ============================================
-     ADD SECTION HANDLERS
-  ============================================ */
   const handleAddSensitiveArea = useCallback(
     async (form: Record<string, string>) => {
       try {
@@ -414,18 +381,14 @@ export default function SensitiveAreaPage() {
         };
 
         await api.post("/sensitive-areas", payload);
-        
-        // Force refresh by resetting to first page
         setPagination(prev => ({ ...prev, pageIndex: 0 }));
         fetchSensitiveAreas(0, pagination.pageSize, searchQuery);
-        
         setAddDropdowns(prev => ({ 
           ...prev, 
           selectedDistrict: "", 
           selectedPoliceStation: "", 
           policeStations: [] 
         }));
-        
         showToast("Sensitive area added successfully!", "success");
       } catch (error: any) {
         showToast(error.response?.data?.message || "Failed to add sensitive area", "error");
@@ -436,7 +399,6 @@ export default function SensitiveAreaPage() {
 
   const sensitiveAreaFields: FieldConfig[] = useMemo(
     () => [
-      // DISTRICT
       {
         name: "district_id",
         label: "District",
@@ -455,7 +417,6 @@ export default function SensitiveAreaPage() {
         },
         isLoading: addDropdowns.isLoadingDistricts,
       },
-      // POLICE STATION
       {
         name: "police_station_id",
         label: "Police Station",
@@ -505,25 +466,19 @@ export default function SensitiveAreaPage() {
     [addDropdowns, handleDropdowns, handleDistrictChange]
   );
 
-  /* ============================================
-     DOWNLOAD SECTION HANDLERS
-  ============================================ */
   const handlePoliceStationDownload = useCallback(async () => {
     try {
       if (!downloadDropdowns.selectedPoliceStation) {
         showToast("Please select a police station first", "error");
         return;
       }
-
       const selectedStation = downloadDropdowns.policeStations.find(
         ps => ps.id.toString() === downloadDropdowns.selectedPoliceStation
       );
-
       if (!selectedStation) {
         showToast("Selected police station not found", "error");
         return;
       }
-
       const pdfExportConfigForStation: ExportPdfOptions = {
         filename: `police-station-${selectedStation.police_station_name?.replace(/\s+/g, '-').toLowerCase() || 'unknown'}-sensitive-areas-${new Date().toLocaleDateString("en-GB").replace(/\//g, "-")}.pdf`,
         title: `Sensitive Areas - ${selectedStation.police_station_name || selectedStation.name}`,
@@ -551,7 +506,6 @@ export default function SensitiveAreaPage() {
         searchQuery: `Police Station: ${selectedStation.police_station_name || selectedStation.name}`,
         userRole: "admin",
       };
-
       exportToPdf(pdfExportConfigForStation);
       showToast(`Downloading data for ${selectedStation.police_station_name || selectedStation.name}`, "success");
     } catch (error) {
@@ -560,9 +514,6 @@ export default function SensitiveAreaPage() {
     }
   }, [downloadDropdowns, sensitiveAreas, exportToPdf, showToast]);
 
-  /* ============================================
-     EDIT MODAL HANDLERS
-  ============================================ */
   const handleEditFieldChange = useCallback(
     async (fieldName: string, value: string, formData: any) => {
       if (fieldName === "district_id") {
@@ -573,7 +524,6 @@ export default function SensitiveAreaPage() {
           police_station_id: "",
         };
       }
-
       return {
         ...formData,
         [fieldName]: value,
@@ -595,32 +545,22 @@ export default function SensitiveAreaPage() {
     async (row: SensitiveAreaRow) => {
       try {
         setIsLoadingAreaDetail(true);
-
         if (!row.id) {
           showToast("Invalid sensitive area id", "error");
           return;
         }
-
         const freshArea = await fetchSensitiveAreaById(row.id);
         if (!freshArea) return;
-
         setEditingSensitiveArea(freshArea);
-        
-        // Fetch districts first
         await handleDropdowns(setEditDropdowns, 'districts');
-        
-        // Set district and police station
         setEditDropdowns(prev => ({
           ...prev,
           selectedDistrict: freshArea.district_id?.toString() || "",
           selectedPoliceStation: freshArea.police_station_id?.toString() || ""
         }));
-
-        // Fetch police stations for the selected district
         if (freshArea.district_id) {
           await handleDropdowns(setEditDropdowns, 'policeStations', freshArea.district_id.toString());
         }
-
         setIsEditModalOpen(true);
       } catch (error) {
         console.error("Error in handleEdit:", error);
@@ -635,12 +575,10 @@ export default function SensitiveAreaPage() {
   const handleUpdateSensitiveArea = useCallback(
     async (formData: any) => {
       if (!editingSensitiveArea) return;
-
       if (!editingSensitiveArea.id) {
         showToast("Invalid sensitive area id", "error");
         return;
       }
-
       try {
         const payload = {
           district_id: Number(formData.district_id),
@@ -651,12 +589,8 @@ export default function SensitiveAreaPage() {
           image: formData.image || editingSensitiveArea.image,
           qrcode: formData.qrcode || editingSensitiveArea.qrcode,
         };
-
         await api.put(`/sensitive-areas/${editingSensitiveArea.id}`, payload);
-        
-        // Force refresh by resetting pagination to current page
         fetchSensitiveAreas(pagination.pageIndex, pagination.pageSize, searchQuery);
-
         setIsEditModalOpen(false);
         setEditingSensitiveArea(null);
         setEditDropdowns({
@@ -667,7 +601,6 @@ export default function SensitiveAreaPage() {
           isLoadingDistricts: false,
           isLoadingPoliceStations: false,
         });
-
         showToast("Sensitive area updated successfully!", "success");
       } catch (error: any) {
         console.error("Update error:", error?.response?.data || error);
@@ -681,15 +614,11 @@ export default function SensitiveAreaPage() {
     async (id: number) => {
       try {
         await api.delete(`/sensitive-areas/${id}`);
-        
-        // Refresh the data - check if we need to go back a page
         if (sensitiveAreas.length === 1 && pagination.pageIndex > 0) {
           setPagination(prev => ({ ...prev, pageIndex: prev.pageIndex - 1 }));
         } else {
-          // Just refresh current page
           fetchSensitiveAreas(pagination.pageIndex, pagination.pageSize, searchQuery);
         }
-        
         showToast("Sensitive area deleted successfully!", "success");
       } catch (error: any) {
         showToast(error.response?.data?.message || "Failed to delete sensitive area", "error");
@@ -698,12 +627,8 @@ export default function SensitiveAreaPage() {
     [sensitiveAreas.length, pagination.pageIndex, pagination.pageSize, searchQuery, fetchSensitiveAreas, showToast]
   );
 
-  /* ============================================
-     EDIT MODAL FIELDS
-  ============================================ */
   const editModalFields = useMemo<FieldConfig[]>(() => {
     if (!editingSensitiveArea) return [];
-
     return [
       {
         type: "select",
@@ -779,9 +704,6 @@ export default function SensitiveAreaPage() {
     handleDistrictChange,
   ]);
 
-  /* ============================================
-     COLUMNS
-  ============================================ */
   const columns: ColumnDef<SensitiveAreaRow>[] = useMemo(
     () => [
       {
@@ -969,9 +891,6 @@ export default function SensitiveAreaPage() {
     getRowId: (row) => row.id,
   });
 
-  /* ============================================
-     RENDER
-  ============================================ */
   return (
     <div className="w-full min-h-screen bg-white px-4 md:px-8">
       <Toast message={toast.message} type={toast.type} isVisible={toast.isVisible} />
@@ -991,89 +910,67 @@ export default function SensitiveAreaPage() {
         }}
       />
 
-      {/* Download Section */}
+      {/* Download Section with Excel Upload */}
       <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-        <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
-          <div className="flex-1">           
-            <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
-              <div className="relative w-full md:w-64">
-                <select
-                  value={downloadDropdowns.selectedDistrict}
-                  onChange={(e) => handleDistrictChange(setDownloadDropdowns, e.target.value)}
-                  onClick={() => handleDropdowns(setDownloadDropdowns, 'districts')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 appearance-none bg-white"
-                  disabled={downloadDropdowns.isLoadingDistricts}
-                >
-                  <option value="">Select District</option>
-                  {downloadDropdowns.districts.map((district) => (
-                    <option key={district.id} value={district.id}>
-                      {district.district_name}
-                    </option>
-                  ))}
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                  </svg>
-                </div>
-              </div>
-              
-              <div className="relative w-full md:w-64">
-                <select
-                  value={downloadDropdowns.selectedPoliceStation}
-                  onChange={(e) => setDownloadDropdowns(prev => ({ 
-                    ...prev, 
-                    selectedPoliceStation: e.target.value 
-                  }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 appearance-none bg-white"
-                  disabled={!downloadDropdowns.selectedDistrict || downloadDropdowns.isLoadingPoliceStations}
-                >
-                  <option value="">Select Police Station</option>
-                  {downloadDropdowns.policeStations.length === 0 && downloadDropdowns.selectedDistrict && !downloadDropdowns.isLoadingPoliceStations ? (
-                    <option value="" disabled>No police stations in this district</option>
-                  ) : (
-                    downloadDropdowns.policeStations.map((station) => (
-                      <option key={station.id} value={station.id}>
-                        {station.police_station_name || station.name}
-                      </option>
-                    ))
-                  )}
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                  </svg>
-                </div>
-              </div>
-              
-              <button
-                onClick={handlePoliceStationDownload}
-                disabled={!downloadDropdowns.selectedPoliceStation || downloadDropdowns.isLoadingPoliceStations}
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Download size={18} />
-                <span>Download</span>
-              </button>
-            </div>
-          </div>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           
-          <div className="text-sm text-gray-500">
-            {downloadDropdowns.isLoadingPoliceStations ? (
-              <div className="flex items-center gap-2">
-                <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-500"></span>
-                <span>Loading stations...</span>
-              </div>
-            ) : (
-              `${downloadDropdowns.policeStations.length} police stations available`
-            )}
+          {/* LEFT SIDE (Dropdowns + Download Button) */}
+          <div className="flex flex-col md:flex-row items-start md:items-center gap-4 flex-wrap">
+            
+            <div className="relative w-full md:w-64">
+              <select
+                value={downloadDropdowns.selectedDistrict}
+                onChange={(e) => handleDistrictChange(setDownloadDropdowns, e.target.value)}
+                onClick={() => handleDropdowns(setDownloadDropdowns, 'districts')}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 bg-white shadow-sm"
+              >
+                <option value="">Select District</option>
+                {downloadDropdowns.districts.map((district) => (
+                  <option key={district.id} value={district.id}>
+                    {district.district_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="relative w-full md:w-64">
+              <select
+                value={downloadDropdowns.selectedPoliceStation}
+                onChange={(e) =>
+                  setDownloadDropdowns(prev => ({ ...prev, selectedPoliceStation: e.target.value }))
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 bg-white shadow-sm"
+              >
+                <option value="">Select Police Station</option>
+                {downloadDropdowns.policeStations.map((station) => (
+                  <option key={station.id} value={station.id}>
+                    {station.police_station_name || station.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              onClick={handlePoliceStationDownload}
+              className="px-4 py-2 bg-green-300 text-white rounded-md hover:bg-green-500 flex items-center gap-2"
+            >
+              <Download size={18} />
+              <span>Download</span>
+            </button>
+
+          </div>
+
+          {/* RIGHT SIDE (Excel Upload Button) */}
+          <div>
+            <ExcelUpload
+              onSuccess={() => {
+                setPagination(prev => ({ ...prev, pageIndex: 0 }));
+                fetchSensitiveAreas(0, pagination.pageSize, searchQuery);
+              }}
+              showToast={showToast}
+            />
           </div>
         </div>
-        
-        {downloadDropdowns.selectedPoliceStation && (
-          <div className="mt-3 text-sm text-blue-600">
-            Selected: {downloadDropdowns.policeStations.find(ps => ps.id.toString() === downloadDropdowns.selectedPoliceStation)?.police_station_name || downloadDropdowns.policeStations.find(ps => ps.id.toString() === downloadDropdowns.selectedPoliceStation)?.name || "Unknown Station"}
-          </div>
-        )}
       </div>
 
       <div className="mt-6">
