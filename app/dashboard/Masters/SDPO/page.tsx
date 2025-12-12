@@ -7,10 +7,11 @@ import { api } from "@/services/api/apiServices";
 import SearchComponent from "@/component/ui/SearchBar/searchBar";
 import { ExportButtons } from "@/component/ui/Export-Buttons/export-Buttons";
 import { ColumnVisibilitySelector } from "@/component/ui/Column-Visibility/column-visibility";
-import { AlertPopover, Toast } from "@/component/ui/AlertPopover";
+import { AlertPopover } from "@/component/ui/AlertPopover";
 import EditModal from "@/component/ui/EditModal/editModal";
 import { useExportPdf, ExportPdfOptions } from "@/hook/UseExportPdf/useExportPdf";
 import { useExportExcel, ExportExcelOptions } from "@/hook/UseExportExcel/useExportExcel";
+import { toast } from "sonner";
 
 interface SDPORow {
   id: number;
@@ -83,12 +84,6 @@ export default function SDPOPage() {
   const [editDistricts, setEditDistricts] = useState<District[]>([]);
   const [editCities, setEditCities] = useState<City[]>([]);
 
-  const [toast, setToast] = useState<{ isVisible: boolean; message: string; type: "success" | "error" }>({
-    isVisible: false,
-    message: "",
-    type: "success"
-  });
-
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 10,
@@ -101,11 +96,6 @@ export default function SDPOPage() {
   // ============================================
   // Helper Functions
   // ============================================
-  const showToast = useCallback((message: string, type: "success" | "error") => {
-    setToast({ isVisible: true, message, type });
-    setTimeout(() => setToast({ isVisible: false, message: "", type: "success" }), 3000);
-  }, []);
-
   const extractData = useCallback((response: any, paths: string[]): any => {
     for (const path of paths) {
       const value = path.split('.').reduce((obj, key) => obj?.[key], response);
@@ -177,12 +167,12 @@ export default function SDPOPage() {
       return countriesData;
     } catch (error) {
       console.error("Error fetching countries:", error);
-      showToast("Failed to fetch countries", "error");
+      toast.error("Failed to fetch countries");
       return [];
     } finally {
       setIsCountriesLoading(false);
     }
-  }, [extractData, showToast]);
+  }, [extractData]);
 
   const fetchStatesByCountry = useCallback(async (countryId: string) => {
     if (!countryId) return [];
@@ -232,10 +222,10 @@ export default function SDPOPage() {
       return extractData(response, ['data.data', 'data', '']);
     } catch (error) {
       console.error("Error fetching single SDPO:", error);
-      showToast("Failed to fetch SDPO details", "error");
+      toast.error("Failed to fetch SDPO details");
       return null;
     }
-  }, [extractData, showToast]);
+  }, [extractData]);
 
   // ============================================
   // MAIN DATA FETCHING
@@ -274,13 +264,13 @@ export default function SDPOPage() {
       
     } catch (error) {
       console.error("Error fetching SDPOs:", error);
-      showToast("Failed to fetch SDPOs", "error");
+      toast.error("Failed to fetch SDPOs");
       setSdpos([]);
       setTotalCount(0);
     } finally {
       setLoading(false);
     }
-  }, [extractData, showToast]);
+  }, [extractData]);
 
   useEffect(() => {
     fetchSDPOs(pagination.pageIndex, pagination.pageSize, searchQuery);
@@ -367,7 +357,6 @@ export default function SDPOPage() {
       return prev; // Do NOT reset pagination on table navigation
     });
   }, [searchQuery]);
-
 
   // ADD SECTION DROPDOWN HANDLERS
   const handleCountryDropdownClick = useCallback(async () => {
@@ -559,7 +548,7 @@ export default function SDPOPage() {
   const handleAddSDPO = useCallback(async (formData: Record<string, string>) => {
     try {
       if (!formData.country_id || !formData.state_id || !formData.district_id || !formData.city_id) {
-        showToast("Please select country, state, district, and city", "error");
+        toast.error("Please select country, state, district, and city");
         return;
       }
 
@@ -573,7 +562,7 @@ export default function SDPOPage() {
 
       await api.post("/sdpo", payload);
       fetchSDPOs(pagination.pageIndex, pagination.pageSize, searchQuery);
-      showToast("SDPO added successfully!", "success");
+      toast.success("SDPO added successfully!");
       
       // Reset form state
       setCurrentCountryId("");
@@ -582,18 +571,19 @@ export default function SDPOPage() {
       setAddStates([]);
       setAddDistricts([]);
       setAddCities([]);
-    } catch (error) {
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || "Error adding SDPO. Please try again.";
+      toast.error(errorMessage);
       console.error("Error adding SDPO:", error);
-      showToast("Error adding SDPO. Please try again.", "error");
     }
-  }, [fetchSDPOs, pagination.pageIndex, pagination.pageSize, searchQuery, showToast]);
+  }, [fetchSDPOs, pagination.pageIndex, pagination.pageSize, searchQuery]);
 
   const handleEdit = useCallback(async (id: number) => {
     try {
       // Fetch the single SDPO record
       const sdpoData = await fetchSingleSDPO(id);
       if (!sdpoData) {
-        showToast("Failed to fetch SDPO details", "error");
+        toast.error("Failed to fetch SDPO details");
         return;
       }
 
@@ -646,9 +636,9 @@ export default function SDPOPage() {
 
     } catch (error) {
       console.error("Error in handleEdit:", error);
-      showToast("Failed to load edit form", "error");
+      toast.error("Failed to load edit form");
     }
-  }, [fetchSingleSDPO, showToast]);
+  }, [fetchSingleSDPO]);
 
   const handleUpdateSDPO = useCallback(async (formData: any) => {
     if (!editingSdpo) return;
@@ -668,24 +658,26 @@ export default function SDPOPage() {
       setIsEditModalOpen(false);
       setEditingSdpo(null);
       setEditFormData(null);
-      showToast("SDPO updated successfully!", "success");
-    } catch (error) {
+      toast.success("SDPO updated successfully!");
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || "Error updating SDPO. Please try again.";
+      toast.error(errorMessage);
       console.error("Error updating SDPO:", error);
-      showToast("Error updating SDPO. Please try again.", "error");
     }
-  }, [editingSdpo, fetchSDPOs, pagination.pageIndex, pagination.pageSize, searchQuery, showToast]);
+  }, [editingSdpo, fetchSDPOs, pagination.pageIndex, pagination.pageSize, searchQuery]);
 
   const handleDeleteConfirm = useCallback(async (id: number) => {
     try {
       await api.delete(`/sdpo/${id}`);
       await fetchSDPOs(pagination.pageIndex, pagination.pageSize, searchQuery);
-      showToast("SDPO deleted successfully!", "success");
-    } catch (error) {
+      toast.success("SDPO deleted successfully!");
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || "Error deleting SDPO. Please try again.";
+      toast.error(errorMessage);
       console.error("Error deleting SDPO:", error);
-      showToast("Error deleting SDPO. Please try again.", "error");
       throw error;
     }
-  }, [fetchSDPOs, pagination.pageIndex, pagination.pageSize, searchQuery, showToast]);
+  }, [fetchSDPOs, pagination.pageIndex, pagination.pageSize, searchQuery]);
 
   const handleEditFieldChange = useCallback(async (fieldName: string, value: string, formData: any) => {
     const updatedData = { ...formData, [fieldName]: value };
@@ -930,12 +922,6 @@ export default function SDPOPage() {
   // ============================================
   return (
     <div className="w-full min-h-screen bg-white px-4 md:px-8">
-      <Toast 
-        message={toast.message} 
-        type={toast.type} 
-        isVisible={toast.isVisible} 
-      />
-
       <AddSection 
         title="Add SDPO"
         fields={sdpoFields}

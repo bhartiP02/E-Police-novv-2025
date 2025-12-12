@@ -7,10 +7,11 @@ import { api } from "@/services/api/apiServices";
 import SearchComponent from "@/component/ui/SearchBar/searchBar";
 import { ExportButtons } from "@/component/ui/Export-Buttons/export-Buttons";
 import { ColumnVisibilitySelector } from "@/component/ui/Column-Visibility/column-visibility";
-import { AlertPopover, Toast } from "@/component/ui/AlertPopover";
+import { AlertPopover } from "@/component/ui/AlertPopover";
 import EditModal from "@/component/ui/EditModal/editModal";
 import { useExportPdf, ExportPdfOptions } from "@/hook/UseExportPdf/useExportPdf";
 import { useExportExcel, ExportExcelOptions } from "@/hook/UseExportExcel/useExportExcel";
+import { toast } from "sonner";
 
 
 interface CityRow {
@@ -82,24 +83,12 @@ export default function CitiesPage() {
   const { exportToPdf } = useExportPdf();
   const { exportToExcel } = useExportExcel();
 
-
-  const [toast, setToast] = useState<{ isVisible: boolean; message: string; type: "success" | "error" }>({
-    isVisible: false,
-    message: "",
-    type: "success"
-  });
-
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 10,
   });
   const [sorting, setSorting] = useState<SortingState>([]);
   const [totalCount, setTotalCount] = useState(0);
-
-  const showToast = useCallback((message: string, type: "success" | "error") => {
-    setToast({ isVisible: true, message, type });
-    setTimeout(() => setToast({ isVisible: false, message: "", type: "success" }), 3000);
-  }, []);
 
   const columns: ColumnDef<CityRow>[] = useMemo(() => [
     {
@@ -253,12 +242,12 @@ export default function CitiesPage() {
       return cityDetailData;
     } catch (error) {
       console.error("Error fetching city detail:", error);
-      showToast("Error fetching city details. Please try again.", "error");
+      toast.error("Error fetching city details. Please try again.");
       return null;
     } finally {
       setDetailLoading(false);
     }
-  }, [extractCityDetail, showToast]);
+  }, [extractCityDetail]);
 
   const fetchCities = useCallback(async (pageIndex: number, pageSize: number, searchTerm: string = ""): Promise<CityRow[]> => {
     try {
@@ -600,7 +589,7 @@ export default function CitiesPage() {
   const handleAddCity = useCallback(async (formData: Record<string, string>) => {
     try {
       if (!formData.country_id || !formData.state_id || !formData.district_id) {
-        showToast("Please select country, state, and district", "error");
+        toast.error("Please select country, state, and district");
         return;
       }
 
@@ -615,12 +604,13 @@ export default function CitiesPage() {
 
       await api.post("/cities", payload);
       fetchCities(pagination.pageIndex, pagination.pageSize, searchQuery);
-      showToast("City added successfully!", "success");
-    } catch (error) {
+      toast.success("City added successfully!");
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || "Error adding city. Please try again.";
+      toast.error(errorMessage);
       console.error("Error adding city:", error);
-      showToast("Error adding city. Please try again.", "error");
     }
-  }, [fetchCities, pagination.pageIndex, pagination.pageSize, searchQuery, showToast]);
+  }, [fetchCities, pagination.pageIndex, pagination.pageSize, searchQuery]);
 
   const handleEdit = useCallback(
     async (city: CityRow) => {
@@ -629,7 +619,7 @@ export default function CitiesPage() {
       try {
         const detail = await fetchCityDetail(city.id);
         if (!detail) {
-          showToast("Failed to load city details", "error");
+          toast.error("Failed to load city details");
           return;
         }
 
@@ -663,10 +653,10 @@ export default function CitiesPage() {
         setIsEditModalOpen(true);
       } catch (error) {
         console.error("Error in edit preparation:", error);
-        showToast("Error preparing edit form. Please try again.", "error");
+        toast.error("Error preparing edit form. Please try again.");
       }
     },
-    [fetchCityDetail, showToast]
+    [fetchCityDetail]
   );
 
   const handleUpdateCity = useCallback(async (formData: any) => {
@@ -690,26 +680,28 @@ export default function CitiesPage() {
       setCityDetail(null);
       setEditStates([]);
       setEditDistricts([]);
-      showToast("City updated successfully!", "success");
-    } catch (error) {
+      toast.success("City updated successfully!");
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || "Error updating city. Please try again.";
+      toast.error(errorMessage);
       console.error("Error updating city:", error);
-      showToast("Error updating city. Please try again.", "error");
     } finally {
       setSaveLoading(false);
     }
-  }, [editingCity, fetchCities, pagination.pageIndex, pagination.pageSize, searchQuery, showToast]);
+  }, [editingCity, fetchCities, pagination.pageIndex, pagination.pageSize, searchQuery]);
 
   const handleDeleteConfirm = useCallback(async (id: number) => {
     try {
       await api.delete(`/cities/${id}`);
       await fetchCities(pagination.pageIndex, pagination.pageSize, searchQuery);
-      showToast("City deleted successfully!", "success");
-    } catch (error) {
+      toast.success("City deleted successfully!");
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || "Error deleting city. Please try again.";
+      toast.error(errorMessage);
       console.error("Error deleting city:", error);
-      showToast("Error deleting city. Please try again.", "error");
       throw error;
     }
-  }, [fetchCities, pagination.pageIndex, pagination.pageSize, searchQuery, showToast]);
+  }, [fetchCities, pagination.pageIndex, pagination.pageSize, searchQuery]);
 
   const handleModalClose = useCallback(() => {
     setIsEditModalOpen(false);
@@ -743,7 +735,6 @@ export default function CitiesPage() {
 
   return (
     <div className="w-full min-h-screen bg-white px-4 md:px-8">
-      <Toast message={toast.message} type={toast.type} isVisible={toast.isVisible} />
       {error && <div className="text-red-600 mb-4">{error}</div>}
 
       <AddSection 
